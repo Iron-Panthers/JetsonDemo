@@ -1,3 +1,17 @@
+# Iron Panthers instructions
+
+Check out the Jetson logs for more info: https://docs.google.com/document/d/1O2P8NMAe6CogZ4O7pT7pMeRby3qC7DffrlxK19gUFdk
+Some important points:
+    - Make sure to install NetworkTables (at this link https://elinux.org/Jetson/FRC_Setup#Step_5:_Building_Network_Tables_.28without_Java.29)
+    - Also make sure to modify the environment variables with the absolute path (no ~)
+    - After cloning this project, run `make` (when in this directory)
+
+Don't assume that all the `Makefile` in all the projects in JetsonDemo are correctly configured, but this one is configured correctly. However, you might have to modify it if you download ntcore is some other location than `/home/ubuntu/`
+
+Also, modify `main.cpp` in the following ways before running `make`
+    - Change `netTableAddress` to the IP of the Roborio
+    - Change `ip` to the IP of the driver station
+
 # Processing and drawing example #
 
 ## Overview ##
