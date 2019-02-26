@@ -62,37 +62,72 @@ extern std::string createReadPipeline (int vid_device, int width, int height,
  * @param port destination port of the image
  * @return gstreamer pipeling string to feed to CvCapture_GStreamer class
  */
-extern std::string createReadPipelineSplit (int vid_device, int width, int height, 
-    int framerate, bool mjpeg, int bitrate, std::string ip, int port) {
+// extern std::string createReadPipelineSplit (int vid_device, int width, int height, 
+//     int framerate, bool mjpeg, int bitrate, std::string ip, int port) {
 
-    char buff[500];
-    if (mjpeg) {
-        sprintf (buff,
-            "v4l2src device=/dev/video%d ! "
-            "image/jpeg,format=(string)BGR,width=(int)%d,height=(int)%d,framerate=(fraction)%d/1 ! jpegdec ! "
-            "tee name=split "
-                "split. ! queue ! videoconvert ! omxh264enc bitrate=%d ! "
-                    "video/x-h264, stream-format=(string)byte-stream ! h264parse ! "
-                    "rtph264pay ! udpsink host=%s port=%d "
-                "split. ! queue ! autovideoconvert ! appsink",
-            //"appsink",
-            vid_device, width, height, framerate, bitrate, ip.c_str(), port);
-    } 
-    else {
-        sprintf (buff,
-            "v4l2src device=/dev/video%d ! "
-            "video/x-raw,format=(string)BGR,width=(int)%d,height=(int)%d,framerate=(fraction)%d/1 ! "
-            "tee name=split "
-                "split. ! queue ! videoconvert ! omxh264enc bitrate=%d ! "
-                    "video/x-h264, stream-format=(string)byte-stream ! h264parse ! "
-                    "rtph264pay ! udpsink host=%s port=%d "
-                "split. ! queue ! autovideoconvert ! appsink",
-            //"appsink",
-            vid_device, width, height, framerate, bitrate, ip.c_str(), port);
-    }
+//     char buff[500];
+//     if (mjpeg) {
+//         sprintf (buff,
+//             "v4l2src device=/dev/video%d ! "
+//             "image/jpeg,format=(string)BGR,width=(int)%d,height=(int)%d,framerate=(fraction)%d/1 ! jpegdec ! "
+//             "tee name=split "
+//                 "split. ! queue ! videoconvert ! omxh264enc bitrate=%d ! "
+//                     "video/x-h264, stream-format=(string)byte-stream ! h264parse ! "
+//                     "rtph264pay ! udpsink host=%s port=%d "
+//                 "split. ! queue ! autovideoconvert ! appsink",
+//             //"appsink",
+//             vid_device, width, height, framerate, bitrate, ip.c_str(), port);
+//     } 
+//     else {
+//         sprintf (buff,
+//             "v4l2src device=/dev/video%d ! "
+//             "video/x-raw,format=(string)BGR,width=(int)%d,height=(int)%d,framerate=(fraction)%d/1 ! "
+//             "tee name=split "
+//                 "split. ! queue ! videoconvert ! omxh264enc bitrate=%d ! "
+//                     "video/x-h264, stream-format=(string)byte-stream ! h264parse ! "
+//                     "rtph264pay ! udpsink host=%s port=%d "
+//                 "split. ! queue ! autovideoconvert ! appsink",
+//             //"appsink",
+//             vid_device, width, height, framerate, bitrate, ip.c_str(), port);
+//     }
+
+//     std::string pipstring = buff;
+//     printf ("read string: %s\n", pipstring.c_str());
+//     return pipstring;
+// }
+
+/**
+ * returns a gstreamer pipeline that reads an image from the camera for opencv
+ * while streaming both back to the driver station. It also returns the opencv image
+ * for processing.
+ * @param cv_device device for OpenCV processing
+ * @param cv_w width for opencv frame
+ * @param cv_h height for opencv frame
+ * @param cv_fr framerate for opencv stream
+ * @param cv_port port on driverstation laptop to recieve opencv stream
+ * @param cam_device device for normal camera stream
+ * @param ip ip address of driver station
+ * @return gstreamer pipeling string to feed to CvCapture_GStreamer class
+ */
+extern std::string createSplitReadPipeline(int cv_device, int cv_w, int cv_h, int cv_fr, int cv_port,
+                                           int cam_device, int cam_w, int cam_h, int cam_fr, int cam_port,
+                                           char *ip)
+{
+    char buff[550];
+    sprintf(buff,
+        "v4l2src device = /dev/video%d !"
+        "video/x-raw, width = (int)%d, height = (int)%d, framerate = (fraction)%d / 1 ! "
+        "x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! tee name=o"
+        "o. ! queue ! appsink"
+        "o. ! queue ! udpsink host=%s port=%d"
+        "v4l2src device = /dev/video%d !"
+        "video/x-raw, width = (int)%d, height = (int)%d, framerate = (fraction)%d / 1 ! "
+        "x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! udpsink host=%s port=%d",
+        cv_device, cv_w, cv_h, cv_fr, ip, cv_port, cam_device, cam_w, cam_h, cam_fr, ip, cam_port
+    );
 
     std::string pipstring = buff;
-    printf ("read string: %s\n", pipstring.c_str());
+    printf("read string: %s\n", pipstring.c_str());
     return pipstring;
 }
 
