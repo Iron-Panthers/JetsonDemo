@@ -1,3 +1,5 @@
+//gst-launch-1.0 -vvv tee name=s v4l2src device=/dev/video0 ! "video/x-raw,width=640,height=480,framerate=30/1" ! x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! udpsink host=10.50.26.5 port=5004 s. v4l2src device=/dev/video1 ! "video/x-raw,width=640,height=480,framerate=30/1" ! x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! udpsink host=10.50.26.5 port=5005 s.
+
 #include "helper.hpp"
 #include "gst_pipeline.hpp"
 #include "vision.hpp"
@@ -24,7 +26,7 @@ int
 bitrate = 600000, //kbit/sec over network
 port_stream = 5806, //destination port for raw image
 port_thresh = 5805; //destination port for thresholded image
-string ip = "192.168.1.34"; //destination ip
+string ip = "10.50.26.5"; //destination ip
 
 string tableName = "CVResultsTable";
 
