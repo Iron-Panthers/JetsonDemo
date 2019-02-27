@@ -1,8 +1,10 @@
-//gst-launch-1.0 -vvv tee name=s v4l2src device=/dev/video0 ! "video/x-raw,width=640,height=480,framerate=30/1" ! x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! udpsink host=10.50.26.5 port=5004 s. v4l2src device=/dev/video1 ! "video/x-raw,width=640,height=480,framerate=30/1" ! x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! udpsink host=10.50.26.5 port=5005 s.
+// gst-launch-1.0 -vvv v4l2src device=/dev/video0 ! "video/x-raw,width=640,height=480,framerate=30/1" ! x264enc speed-preset=1 tune=zerolatency bitrate=1024 ! rtph264pay ! udpsink host=10.50.26.5 port=5004
+// gst-launch-1.0 -vvv v4l2src device=/dev/video1 ! "video/x-raw,width=640,height=480,framerate=30/1" ! x264enc speed-preset=1 tune=zerolatency bitrate=1024 ! rtph264pay ! udpsink host=10.50.26.5 port=5005
 
 #include "helper.hpp"
 #include "gst_pipeline.hpp"
 #include "vision.hpp"
+#include "stdio.h"
 
 using namespace std;
 
@@ -14,23 +16,20 @@ void fillCircle (cv::Mat img, int rad, cv::Point center);
 void pushToNetworkTables (VisionResultsPackage info);
 
 //camera parameters
-int 
-device = 0, //bc we are using video0 in this case
-width = 320, 
-height = 240, 
-framerate = 15, 
-mjpeg = false; //mjpeg is not better than just grabbing a raw image in this case
+int device = 1;
+const char* deviceName = "/dev/video1";
+int width = 640;
+int height = 480;
+int framerate = 30;
 
 //network parameters
-int
-bitrate = 600000, //kbit/sec over network
-port_stream = 5806, //destination port for raw image
-port_thresh = 5805; //destination port for thresholded image
-string ip = "10.50.26.5"; //destination ip
+int bitrate = 1024;
+int port = 5005; //destination port for raw image
+const char* ip = "10.50.26.5"; //destination ip
 
 string tableName = "CVResultsTable";
 
-bool verbose = true;
+bool verbose = false;
 
 void flash_good_settings() {
     char setting_script[100];
@@ -44,11 +43,13 @@ void flash_bad_settings() {
     system (setting_script);
 }
 
-int main () {
+int main(int argc, char *argv[])
+{
     //call the bash script to set camera settings
     flash_good_settings();
+    gst_init(&argc, &argv);
 
-    //initialize NetworkTables
+    initialize NetworkTables
     NetworkTable::SetClientMode();
     NetworkTable::SetDSClientEnabled(false);
     NetworkTable::SetIPAddress(llvm::StringRef(netTableAddress));
@@ -56,37 +57,20 @@ int main () {
     if (verbose) printf ("Initialized table\n");
     myNetworkTable = NetworkTable::GetTable(tableName);
 
-    //open camera using CvCapture_GStreamer class
     CvCapture_GStreamer mycam;
-    string read_pipeline = createReadPipelineSplit (
-            device, width, height, framerate, mjpeg, 
-            bitrate, ip, port_stream);
-    if (verbose) {
-        printf ("GStreamer read pipeline: %s\n", read_pipeline.c_str()); 
-    }
-    mycam.open (CV_CAP_GSTREAMER_FILE, read_pipeline.c_str());
+    mycam.openSplitPipeline(deviceName, width, height, framerate, bitrate, ip, port);
+    gst_element_set_state(mycam.pipeline, GST_STATE_PLAYING);
 
     if (verbose) {
         printf ("Succesfully opened camera with dimensions: %dx%d\n",
             width, height);
     }
 
-    //open vidoe writer using CvVideoWriter_GStreamer class
-    CvVideoWriter_GStreamer mywriter;
-    string write_pipeline = create_write_pipeline (width, height, framerate, 
-            bitrate, ip, port_thresh);
-    if (verbose) {
-        printf ("GStreamer write pipeline: %s\n", write_pipeline.c_str());
-    }
-    mywriter.open (write_pipeline.c_str(), 
-        0, framerate, cv::Size(width, height), true);
-
     //initialize raw & processed image matrices
     cv::Mat cameraFrame, processedImage;
 
     if (verbose) {
-        printf ("Data header:\n%s", 
-            VisionResultsPackage::createCSVHeader().c_str());
+        cout << "Data header: " <<  VisionResultsPackage::createCSVHeader().c_str() << endl;
     }
 
     //take each frame from the pipeline
@@ -106,30 +90,32 @@ int main () {
         if (verbose) printf ("frame #%lld\n", frame);
 
         if (success) {
-            IplImage *img = mycam.retrieveFrame(0); //store frame in IplImage
+            const IplImage *img = mycam.retrieveFrame(0); //store frame in IplImage
             cameraFrame = cv::cvarrToMat (img); //convert IplImage to cv::Mat
-            processedImage = cameraFrame;
-                
-            //process the image, put the information into network tables
-            VisionResultsPackage info = calculate(cameraFrame, processedImage);
 
-            pushToNetworkTables (info);
+            // processedImage = cameraFrame;
+                
+            // // process the image, put the information into network tables
+            VisionResultsPackage info = calculate(cameraFrame, processedImage);
+            cout << "PROCESSED MAT" << endl;
+
+            // // pushToNetworkTables (info);
           
-            //pass the results back out
-            IplImage outImage = (IplImage) processedImage;
-            printf ("results string: %s\n", info.createCSVLine().c_str());
-            if (verbose) {
-                printf ("Out image stats: (depth %d), (nchannels %d)\n", 
-                    outImage.depth, outImage.nChannels);
-            }
-            mywriter.writeFrame (&outImage); //write output image over network
+            // //pass the results back out
+            // IplImage outImage = (IplImage) processedImage;
+            // printf ("results string: %s\n", info.createCSVLine().c_str());
+            // if (verbose) {
+            //     printf ("Out image stats: (depth %d), (nchannels %d)\n", 
+            //         outImage.depth, outImage.nChannels);
+            // }
+        } else {
+            cout << "frame failure" << endl;
         }
 
         //delay for 10 millisecondss
         usleep (10);
     }
 
-    mywriter.close();
     mycam.close();
     return 0;
 }

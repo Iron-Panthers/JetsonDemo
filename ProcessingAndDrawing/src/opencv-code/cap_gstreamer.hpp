@@ -52,14 +52,16 @@ public:
     virtual ~CvCapture_GStreamer() { close(); }
 
     virtual bool open( int type, const char* filename );
+    virtual bool openSplitPipeline(const char* device, int width, int height, int framerate, int bitrate, const char *ip, int port);
     virtual void close();
 
     virtual double getProperty(int);
     virtual bool setProperty(int, double);
     virtual bool grabFrame();
     virtual IplImage* retrieveFrame(int);
+    GstElement *pipeline;
 
-protected:
+  protected:
     void init();
     bool reopen();
     bool isPipelinePlaying();
@@ -71,7 +73,6 @@ protected:
     static void newPad(GstElement *myelement,
                        GstPad     *pad,
                        gpointer    data);
-    GstElement*   pipeline;
     GstElement*   uridecodebin;
     GstElement*   v4l2src;
     GstElement*   color;

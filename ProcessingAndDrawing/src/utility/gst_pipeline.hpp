@@ -109,24 +109,17 @@ extern std::string createReadPipeline (int vid_device, int width, int height,
  * @param ip ip address of driver station
  * @return gstreamer pipeling string to feed to CvCapture_GStreamer class
  */
-extern std::string createSplitReadPipeline(int cv_device, int cv_w, int cv_h, int cv_fr, int cv_port,
-                                           int cam_device, int cam_w, int cam_h, int cam_fr, int cam_port,
-                                           char *ip)
+extern std::string createReadPipelineSplit(int cv_device, int cv_w, int cv_h, int cv_fr, int cv_port)
 {
     char buff[550];
     sprintf(buff,
-        "v4l2src device = /dev/video%d !"
-        "video/x-raw, width = (int)%d, height = (int)%d, framerate = (fraction)%d / 1 ! "
-        "x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! tee name=o"
-        "o. ! queue ! appsink"
-        "o. ! queue ! udpsink host=%s port=%d"
-        "v4l2src device = /dev/video%d !"
-        "video/x-raw, width = (int)%d, height = (int)%d, framerate = (fraction)%d / 1 ! "
-        "x264enc speed-preset=1 tune=zerolatency bitrate=512 ! rtph264pay ! udpsink host=%s port=%d",
-        cv_device, cv_w, cv_h, cv_fr, ip, cv_port, cam_device, cam_w, cam_h, cam_fr, ip, cam_port
+        "gst-launch-1.0 -v v4l2src device=/dev/video%d ! video/x-raw, width = %d, height = %d, framerate = %d / 1 ! x264enc speed-preset=1 tune=zerolatency bitrate=1024 ! rtph264pay ! tee name=out"
+        "out. ! queue ! appsink"
+        "out. ! queue ! udpsink host=10.50.26.5 port=%d",
+        cv_device, cv_w, cv_h, cv_fr, cv_port
     );
-
     std::string pipstring = buff;
+
     printf("read string: %s\n", pipstring.c_str());
     return pipstring;
 }

@@ -40,9 +40,6 @@ struct CameraSettings {
 
     //sharpness: does not matter much
     int sharpness = 25;
-
-    //backlight compensation: off
-    int backlight_compensation = 0;
     
     //exposure auto: menu item, should be set to off
     int exposure_auto = 1;
@@ -61,7 +58,6 @@ inline bool operator== (const CameraSettings &s1,const CameraSettings &s2) {
         s1.white_balance_temperature == s2.white_balance_temperature &&
         s1.power_line_frequency == s2.power_line_frequency &&
         s1.sharpness == s2.sharpness &&
-        s1.backlight_compensation == s2.backlight_compensation &&
         s1.exposure_auto == s2.exposure_auto &&
         s1.exposure_absolute == s2.exposure_absolute;
 }

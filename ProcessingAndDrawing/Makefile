@@ -8,7 +8,7 @@ LIBS       := -L/home/ubuntu/ntcore/ `pkg-config --cflags --libs opencv gstreame
 SOURCES    := $(shell find src -type f -name *.cpp)
 OBJECTS    := $(patsubst src/%,obj/%,$(SOURCES:.cpp=.o))
 
-CPP_ARGS  := -std=c++11 -Wall -Werror -g
+CPP_ARGS  := -std=c++11 -Wall -g
 
 all: obj gstream_cv
 
