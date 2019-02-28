@@ -36,8 +36,6 @@
 #define COLOR_ELEM_NAME COLOR_ELEM
 
 void toFraction(double decimal, double &numerator, double &denominator);
-void handleMessage(GstElement * pipeline);
-
 
 static cv::Mutex gst_initializer_mutex;
 
@@ -45,21 +43,18 @@ static cv::Mutex gst_initializer_mutex;
  * \brief The CvCapture_GStreamer class
  * Use GStreamer to capture video
  */
-class CvCapture_GStreamer : public CvCapture
+class CvCapture_GStreamer
 {
 public:
     CvCapture_GStreamer() { init(); }
-    virtual ~CvCapture_GStreamer() { close(); }
+    ~CvCapture_GStreamer() { close(); }
 
-    virtual bool open( int type, const char* filename );
-    virtual bool openSplitPipeline(const char* device, int width, int height, int framerate, int bitrate, const char *ip, int port);
-    virtual void close();
+    bool open( int type, const char* filename );
+    bool openSplitPipeline(const char* device, int width, int height, int framerate, int bitrate, const char *ip, int port);
+    void close();
 
-    virtual double getProperty(int);
-    virtual bool setProperty(int, double);
-    virtual bool grabFrame();
-    virtual IplImage* retrieveFrame(int);
     GstElement *pipeline;
+    GstElement *writePipeline;
 
   protected:
     void init();
@@ -68,12 +63,8 @@ public:
     void startPipeline();
     void stopPipeline();
     void restartPipeline();
-    void setFilter(const char* prop, int type, int v1, int v2 = 0);
-    void removeFilter(const char *filter);
-    static void newPad(GstElement *myelement,
-                       GstPad     *pad,
-                       gpointer    data);
     GstElement*   uridecodebin;
+    GstElement*   appSrc;
     GstElement*   v4l2src;
     GstElement*   color;
     GstElement*   sink;
@@ -88,34 +79,6 @@ public:
     gint          width;
     gint          height;
     double        fps;
-};
-
-/*!
- * \brief The CvVideoWriter_GStreamer class
- * Use Gstreamer to write video
- */
-class CvVideoWriter_GStreamer : public CvVideoWriter
-{
-public:
-    CvVideoWriter_GStreamer() { init(); }
-    virtual ~CvVideoWriter_GStreamer() { close(); }
-
-    virtual bool open( const char* filename, int fourcc,
-                       double fps, CvSize frameSize, bool isColor );
-    virtual void close();
-    virtual bool writeFrame( const IplImage* image );
-protected:
-    void init();
-    const char* filenameToMimetype(const char* filename);
-    GstElement* pipeline;
-    GstElement* source;
-    GstElement* encodebin;
-    GstElement* file;
-
-    GstBuffer* buffer;
-    int input_pix_fmt;
-    int num_frames;
-    double framerate;
 };
 
 #endif

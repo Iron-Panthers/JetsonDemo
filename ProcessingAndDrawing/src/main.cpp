@@ -21,6 +21,8 @@ const char* deviceName = "/dev/video1";
 int width = 640;
 int height = 480;
 int framerate = 30;
+static GMainLoop* loop;
+static GstElement* pipeline;
 
 //network parameters
 int bitrate = 1024;
@@ -43,13 +45,70 @@ void flash_bad_settings() {
     system (setting_script);
 }
 
+static bool message_cb(GstBus *bus, GstMessage *message, gpointer user_data)
+{
+    switch (GST_MESSAGE_TYPE(message))
+    {
+    case GST_MESSAGE_ERROR:
+    {
+        GError *err = NULL;
+        gchar *name, *debug = NULL;
+
+        name = gst_object_get_path_string(message->src);
+        gst_message_parse_error(message, &err, &debug);
+
+        g_printerr("ERROR: from element %s: %s\n", name, err->message);
+        if (debug != NULL)
+            g_printerr("Additional debug info:\n%s\n", debug);
+
+        g_error_free(err);
+        g_free(debug);
+        g_free(name);
+
+        g_main_loop_quit(loop);
+        break;
+    }
+    case GST_MESSAGE_WARNING:
+    {
+        GError *err = NULL;
+        gchar *name, *debug = NULL;
+
+        name = gst_object_get_path_string(message->src);
+        gst_message_parse_warning(message, &err, &debug);
+
+        g_printerr("ERROR: from element %s: %s\n", name, err->message);
+        if (debug != NULL)
+            g_printerr("Additional debug info:\n%s\n", debug);
+
+        g_error_free(err);
+        g_free(debug);
+        g_free(name);
+        break;
+    }
+    case GST_MESSAGE_EOS:
+    {
+        g_print("Got EOS\n");
+        g_main_loop_quit(loop);
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        g_main_loop_unref(loop);
+        gst_object_unref(pipeline);
+        exit(0);
+        break;
+    }
+    default:
+        break;
+    }
+
+    return TRUE;
+}
+
 int main(int argc, char *argv[])
 {
     //call the bash script to set camera settings
     flash_good_settings();
     gst_init(&argc, &argv);
 
-    initialize NetworkTables
+    // initialize NetworkTables
     NetworkTable::SetClientMode();
     NetworkTable::SetDSClientEnabled(false);
     NetworkTable::SetIPAddress(llvm::StringRef(netTableAddress));
@@ -59,64 +118,25 @@ int main(int argc, char *argv[])
 
     CvCapture_GStreamer mycam;
     mycam.openSplitPipeline(deviceName, width, height, framerate, bitrate, ip, port);
-    gst_element_set_state(mycam.pipeline, GST_STATE_PLAYING);
 
-    if (verbose) {
-        printf ("Succesfully opened camera with dimensions: %dx%d\n",
-            width, height);
+    if (verbose)
+    {
+        printf("Succesfully opened camera with dimensions: %dx%d\n", width, height);
+        cout << "Data header: " << VisionResultsPackage::createCSVHeader().c_str() << endl;
     }
 
-    //initialize raw & processed image matrices
-    cv::Mat cameraFrame, processedImage;
+    pipeline = mycam.pipeline;
+    loop = g_main_loop_new(NULL, FALSE);
 
-    if (verbose) {
-        cout << "Data header: " <<  VisionResultsPackage::createCSVHeader().c_str() << endl;
-    }
+    GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
+    gst_bus_add_signal_watch(bus);
+    g_signal_connect(G_OBJECT(bus), "message", G_CALLBACK(message_cb), NULL);
+    gst_object_unref(GST_OBJECT(bus));
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
 
-    //take each frame from the pipeline
-    for (long long frame = 0; ; frame++) {
-        //have to alternate from bad settings to good settings on some cameras
-        //because of weird firmware issues, sometimes the flash doesn't stick 
-        //otherwise
-        if (frame < 10) {
-            flash_bad_settings();
-        }
-        else if (frame == 50) {
-            flash_good_settings();
-        }
+    g_print("Starting loop");
+    g_main_loop_run(loop);
 
-        bool success = mycam.grabFrame();
-
-        if (verbose) printf ("frame #%lld\n", frame);
-
-        if (success) {
-            const IplImage *img = mycam.retrieveFrame(0); //store frame in IplImage
-            cameraFrame = cv::cvarrToMat (img); //convert IplImage to cv::Mat
-
-            // processedImage = cameraFrame;
-                
-            // // process the image, put the information into network tables
-            VisionResultsPackage info = calculate(cameraFrame, processedImage);
-            cout << "PROCESSED MAT" << endl;
-
-            // // pushToNetworkTables (info);
-          
-            // //pass the results back out
-            // IplImage outImage = (IplImage) processedImage;
-            // printf ("results string: %s\n", info.createCSVLine().c_str());
-            // if (verbose) {
-            //     printf ("Out image stats: (depth %d), (nchannels %d)\n", 
-            //         outImage.depth, outImage.nChannels);
-            // }
-        } else {
-            cout << "frame failure" << endl;
-        }
-
-        //delay for 10 millisecondss
-        usleep (10);
-    }
-
-    mycam.close();
     return 0;
 }
 
