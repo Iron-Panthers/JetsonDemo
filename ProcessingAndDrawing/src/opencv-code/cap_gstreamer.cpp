@@ -206,31 +206,13 @@ void CvCapture_GStreamer::restartPipeline()
     this->startPipeline();
 }
 
-static GstFlowReturn new_sample(GstAppSink *sink, gpointer data)
+static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
 {
     /* Retrieve the buffer */
-    GstSample *sample = gst_app_sink_pull_sample(sink);
-    CvCapture_GStreamer* obj = (CvCapture_GStreamer*)data;
+    GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
     if (sample)
     {
         cout << "NEW SAMPLE" << endl;
-
-        // GstCaps *caps = gst_sample_get_caps(sample);
-        GstBuffer *buffer = gst_sample_get_buffer(sample);
-        // const GstStructure *info = gst_sample_get_info(sample);
-
-        // ---- Read frame and convert to opencv format ---------------
-
-        GstMapInfo map;
-        gst_buffer_map(buffer, &map, GST_MAP_READ);
-
-        // convert gstreamer data to OpenCV Mat, you could actually
-        // resolve height / width from caps...
-        Mat frame(Size(obj->width, obj->height), CV_8UC3, (char *)map.data, Mat::AUTO_STEP);
-        int frameSize = map.size;
-        // cout << "M = " << endl
-        //      << " " << frame << endl
-        //      << endl;
 
         // GstBuffer *buffer = gst_sample_get_buffer(sample);
         // if (!buffer) {
@@ -239,23 +221,9 @@ static GstFlowReturn new_sample(GstAppSink *sink, gpointer data)
         // }
 
         // gst_buffer_map(buffer, obj->info, (GstMapFlags)GST_MAP_READ);
-        // cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_16UC3, (char *)obj->info->data);
-        // Mat mat(480, 640, CV_16UC3);
-        // for (int i = 0; i < mat.rows; ++i)
-        // {
-        //     for (int j = 0; j < mat.cols; ++j)
-        //     {
-        //         Vec3b &rgba = mat.at<Vec3b>(i, j);
-        //         rgba[0] = saturate_cast<uchar>((float(mat.cols - j)) / ((float)mat.cols) * 65535);
-        //         rgba[1] = saturate_cast<uchar>((float(mat.rows - i)) / ((float)mat.rows) * 65535);
-        //         rgba[2] = saturate_cast<uchar>(0.5 * (rgba[0] + rgba[1]));
-        //     }
-        // }
-        // cout << "channels " << frameMat.channels() << " type " << frameMat.depth() << endl;
-        // cout << "channels " << mat.channels() << " type " << mat.depth() << endl;
-        // // cv::cvCvtColor(frameMat)
+        // cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)obj->info->data);
         // VisionResultsPackage res = calculate(frame);
-        // // NetTableManager::getInstance()->pushToNetworkTables(res);
+        // NetTableManager::getInstance()->pushToNetworkTables(res);
 
         return GST_FLOW_OK;
     } else {
@@ -268,8 +236,8 @@ static GstFlowReturn new_sample(GstAppSink *sink, gpointer data)
 bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int height, int framerate, int bitrate, const char *ip, int port)
 {
 
-    CvCapture_GStreamer::width = width;
-    CvCapture_GStreamer::height = height;
+    this->width = width;
+    this->height = height;
 
     /* Create the elements */
     GstElement *pipeline = gst_pipeline_new("cv_pipeline");
@@ -297,9 +265,7 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
     gst_app_sink_set_emit_signals(sank, true);
     gst_app_sink_set_max_buffers(sank, 1);
     gst_app_sink_set_drop(sank, true);
-    GstAppSinkCallbacks callbacks = {NULL, NULL, new_sample};
-    gst_app_sink_set_callbacks(sank, &callbacks, this, NULL);
-    // g_signal_connect(sank, "new-sample", G_CALLBACK(new_sample), this);
+    g_signal_connect(sank, "new-sample", G_CALLBACK(new_sample), this);
 
     GstElement *queue_udp = gst_element_factory_make("queue", NULL);
     GstElement *enc_udp = gst_element_factory_make("x264enc", NULL);
