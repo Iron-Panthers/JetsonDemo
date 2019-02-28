@@ -10,13 +10,13 @@
 class NetTableManager
 {
     public:
-        static void pushToNetworkTables(VisionResultsPackage info);
+        void pushToNetworkTables(VisionResultsPackage info);
+        static NetTableManager* getInstance();
 
-    protected:
-        NetTableManager() { init(); }
-        void init();
+    private:
+        NetTableManager();
+        shared_ptr<NetworkTable> networkTable;
 
-        static shared_ptr<NetworkTable> networkTable;
         static NetTableManager* instance;
 };
 

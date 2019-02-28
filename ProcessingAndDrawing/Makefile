@@ -1,5 +1,5 @@
 GST_INC    := -I/usr/include/gstreamer-1.0 -I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include -I/usr/lib/arm-linux-gnueabihf/gstreamer-1.0/include
-LOCAL_INC  := -Isrc/opencv-code/ -Isrc/utility/
+LOCAL_INC  := -Isrc/ -Isrc/opencv-code/ -Isrc/utility/
 NTCORE_INC := -I/home/ubuntu/ntcore/include/ -I/home/ubuntu/ntcore/wpiutil/include/
 INC        := ${NTCORE_INC} ${LOCAL_INC} ${GST_INC}
 
