@@ -74,7 +74,6 @@ public:
     GstElement*   sink;
 
     GstCaps*      caps;
-    IplImage*     frame;
     gint64        duration;
     double        fps;
 };

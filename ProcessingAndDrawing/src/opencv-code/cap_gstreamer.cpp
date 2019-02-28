@@ -91,7 +91,6 @@ void CvCapture_GStreamer::init()
     sink = NULL;
 
     caps = NULL;
-    frame = NULL;
     duration = -1;
     width = -1;
     height = -1;
@@ -214,16 +213,16 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
     {
         cout << "NEW SAMPLE" << endl;
 
-        // GstBuffer *buffer = gst_sample_get_buffer(sample);
-        // if (!buffer) {
-        //     cout << "no buffer" << endl;
-        //     return GST_FLOW_ERROR;
-        // }
+        GstBuffer *buffer = gst_sample_get_buffer(sample);
+        if (!buffer) {
+            cout << "no buffer" << endl;
+            return GST_FLOW_ERROR;
+        }
 
-        // gst_buffer_map(buffer, obj->info, (GstMapFlags)GST_MAP_READ);
-        // cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)obj->info->data);
-        // VisionResultsPackage res = calculate(frame);
-        // NetTableManager::getInstance()->pushToNetworkTables(res);
+        gst_buffer_map(buffer, obj->info, (GstMapFlags)GST_MAP_READ);
+        cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)obj->info->data);
+        VisionResultsPackage res = calculate(frameMat);
+        NetTableManager::getInstance()->pushToNetworkTables(res);
 
         return GST_FLOW_OK;
     } else {
@@ -244,6 +243,8 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
 
     GstElement *camSource = gst_element_factory_make("v4l2src", "cv_src");
     g_object_set(camSource, "device", device, NULL);
+    GstElement *tee = gst_element_factory_make("tee", "t");
+
     GstElement *xraw = gst_element_factory_make("capsfilter", NULL);
     GstCaps *xrawCap = gst_caps_new_simple("video/x-raw",
                                            "width", G_TYPE_INT, width, 
@@ -253,12 +254,8 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
     g_object_set(xraw, "caps", xrawCap, NULL);
     gst_caps_unref(xrawCap);
 
-    GstElement *tee = gst_element_factory_make("tee", "t");
 
     GstElement *queue_cv = gst_element_factory_make("queue", NULL);
-    GstElement *enc_cv = gst_element_factory_make("x264enc", NULL);
-    g_object_set(enc_cv, "tune", 4, "bitrate", 8192, "speed-preset", 1, NULL);
-    GstElement *rtp_cv = gst_element_factory_make("rtph264pay", NULL);
     GstElement *sink_cv = gst_element_factory_make("appsink", NULL);
     this->sink = sink_cv;
     GstAppSink *sank = GST_APP_SINK(gst_object_ref(sink_cv));
@@ -274,28 +271,27 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
     GstElement *sink_udp = gst_element_factory_make("udpsink", NULL);
     g_object_set(sink_udp, "host", ip, "port", port, NULL);
 
-    if (!camSource || !xraw || !tee || !queue_cv || !enc_cv || !rtp_cv || !sink_cv || !queue_udp || !enc_udp || !rtp_udp || !sink_udp) {
+    if (!camSource || !xraw || !tee || !queue_cv || !sink_cv || !queue_udp || !enc_udp || !rtp_udp || !sink_udp) {
         cout << "didnt create" << endl;
     }
 
-    gst_bin_add_many(GST_BIN(pipeline), camSource, xraw, tee, queue_cv, enc_cv, rtp_cv, sink_cv, queue_udp, enc_udp, rtp_udp, sink_udp, NULL);
-    if (!gst_element_link_many(camSource, xraw, tee, NULL)) {
+    gst_bin_add_many(GST_BIN(pipeline), camSource, xraw, tee, queue_cv, sink_cv, queue_udp, enc_udp, rtp_udp, sink_udp, NULL);
+    if (!gst_element_link_many(camSource, tee, NULL)) {
         cout << "didnt link start" << endl;
         return false;
     }
-    if (!gst_element_link_many(tee, queue_udp, enc_udp, rtp_udp, sink_udp, NULL))
+    if (!gst_element_link_many(tee, queue_udp, xraw, enc_udp, rtp_udp, sink_udp, NULL))
     {
         cout << "didnt link udp" << endl;
         return false;
     }
-    if (!gst_element_link_many(tee, queue_cv, enc_cv, rtp_cv, sink_cv, NULL))
+    if (!gst_element_link_many(tee, queue_cv, sink_cv, NULL))
     {
         cout << "didnt link cv" << endl;
         return false;
     }
 
     this->v4l2src = camSource;
-    this->frame = cvCreateImageHeader(cvSize(width, height), IPL_DEPTH_8U, 3);
     this->pipeline = pipeline;
     printf("set pipeline\n");
     return true;
