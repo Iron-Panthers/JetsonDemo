@@ -50,6 +50,7 @@
 
 #include "cap_gstreamer.hpp"
 #include <iostream>
+#include "NetTableManager.hpp"
 using namespace std;
 
 /*!
@@ -89,8 +90,6 @@ void CvCapture_GStreamer::init()
     sink = NULL;
 
     sample = NULL;
-    info = new GstMapInfo;
-
     buffer = NULL;
     caps = NULL;
     frame = NULL;
@@ -213,28 +212,18 @@ static GstFlowReturn new_sample(GstElement *sink, GstAppSrc* src)
     /* Retrieve the buffer */
     GstSample *sample;
 
-    cout << "NEW SAMPLE" << endl;
-
+    // cout << "NEW SAMPLE" << endl;
     /* Retrieve the buffer */
     g_signal_emit_by_name(sink, "pull-sample", &sample);
     if (sample)
     {
-        GstBuffer * buffer = gst_sample_get_buffer(sample);
+        GstBuffer* buffer = gst_sample_get_buffer(sample);
         gst_sample_unref(sample);
-        // if (gst_app_src_push_buffer(src, buffer) != GST_FLOW_OK)
-        // {
-        //     cout << "DIDN'T PUSH UH OH" << endl;
-        //     return GST_FLOW_ERROR;
-        // }
-        // cout << "Frame pushed" << endl;
-
-        // gboolean success = gst_buffer_map(buffer, info, (GstMapFlags)GST_MAP_READ);
-        // if (!success)
-        // {
-        //     return 0;
-        // }
-        // frame->imageData = (char *)info->data;
-        // gst_buffer_unmap(buffer, info);
+        
+        const Mat* frameMat = Mat(Size(width, height), CV_8UC3, (char *)GST_BUFFER_DATA(buffer));
+        Mat *procImg;
+        VisionResultsPackage res = calculate(frameMat, procImg);
+        NetTableManager::pushToNetworkTables(res);
 
         return GST_FLOW_OK;
     }
@@ -244,6 +233,10 @@ static GstFlowReturn new_sample(GstElement *sink, GstAppSrc* src)
 
 bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int height, int framerate, int bitrate, const char *ip, int port)
 {
+
+    this->width = width;
+    this->height = height;
+
     /* Create the elements */
     GstElement *pipeline = gst_pipeline_new("cv_pipeline");
 

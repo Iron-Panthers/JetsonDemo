@@ -8,13 +8,6 @@
 
 using namespace std;
 
-shared_ptr<NetworkTable> myNetworkTable; //our networktable for reading/writing
-string netTableAddress = "192.168.1.34"; //address of the rio
-
-//useful for testing OpenCV drawing to see you can modify an image
-void fillCircle (cv::Mat img, int rad, cv::Point center);
-void pushToNetworkTables (VisionResultsPackage info);
-
 //camera parameters
 int device = 1;
 const char* deviceName = "/dev/video1";
@@ -28,8 +21,6 @@ static GstElement* pipeline;
 int bitrate = 1024;
 int port = 5005; //destination port for raw image
 const char* ip = "10.50.26.5"; //destination ip
-
-string tableName = "CVResultsTable";
 
 bool verbose = false;
 
@@ -108,14 +99,6 @@ int main(int argc, char *argv[])
     flash_good_settings();
     gst_init(&argc, &argv);
 
-    // initialize NetworkTables
-    NetworkTable::SetClientMode();
-    NetworkTable::SetDSClientEnabled(false);
-    NetworkTable::SetIPAddress(llvm::StringRef(netTableAddress));
-    NetworkTable::Initialize();
-    if (verbose) printf ("Initialized table\n");
-    myNetworkTable = NetworkTable::GetTable(tableName);
-
     CvCapture_GStreamer mycam;
     mycam.openSplitPipeline(deviceName, width, height, framerate, bitrate, ip, port);
 
@@ -138,20 +121,5 @@ int main(int argc, char *argv[])
     g_main_loop_run(loop);
 
     return 0;
-}
-
-void fillCircle (cv::Mat img, int rad, cv::Point center) {
-    int thickness = -1;
-    int lineType = 8;
-    cv::circle (img, center, rad, cv::Scalar(0, 0, 255), thickness, lineType);
-}
-
-void pushToNetworkTables (VisionResultsPackage info) {
-    myNetworkTable -> PutString ("VisionResults", info.createCSVLine());
-    myNetworkTable -> PutString ("VisionResultsHeader", info.createCSVHeader());
-    myNetworkTable -> PutNumber ("Sample Hue", info.sampleHue);
-    myNetworkTable -> PutNumber ("Sample Sat", info.sampleSat);
-    myNetworkTable -> PutNumber ("Sample Val", info.sampleVal);
-    myNetworkTable -> Flush();
 }
 
