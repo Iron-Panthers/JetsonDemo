@@ -1,3 +1,11 @@
+# How does Iron Panther's version work?
+
+We have a gstreamer pipeline which takes the raw image and sends it two places. The first place is the Drivestation like normal (a `udpsink`), and the image is sent at a bitrate of 1024 by default. The second place is into the C++ code, specifically to opencv. 
+
+You can find the buffer containing the images in the `new_sample` method in `cap_gstreamer.cpp`, and can modify the opencv code in `calculate` in `vision.cpp`. 
+
+The current setup is not written to send a modified version of the image to the driverstation, meaning the driver won't easily know if OpenCV is working. This is because seperating the two pipelines lowers latency and increases reliability (at least in theory).
+
 # Iron Panthers instructions
 
 Check out the Jetson logs for more info: https://docs.google.com/document/d/1O2P8NMAe6CogZ4O7pT7pMeRby3qC7DffrlxK19gUFdk
