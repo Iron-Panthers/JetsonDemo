@@ -55,6 +55,9 @@ public:
 
     GstElement *pipeline;
     GstElement *writePipeline;
+    gint width;
+    gint height;
+    GstMapInfo *info;
 
   protected:
     void init();
@@ -63,21 +66,16 @@ public:
     void startPipeline();
     void stopPipeline();
     void restartPipeline();
-    GstElement*   uridecodebin;
+    
+    GstElement *uridecodebin;
     GstElement*   appSrc;
     GstElement*   v4l2src;
     GstElement*   color;
     GstElement*   sink;
 
-    GstSample*    sample;
-    GstMapInfo*   info;
-
-    GstBuffer*    buffer;
     GstCaps*      caps;
     IplImage*     frame;
     gint64        duration;
-    gint          width;
-    gint          height;
     double        fps;
 };
 
