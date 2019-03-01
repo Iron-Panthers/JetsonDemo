@@ -63,6 +63,20 @@ VisionResultsPackage calculate(const Mat &bgr){
         return res; //return the default result (failure)
     }
 
+    Mat processedImage = threshedImg.clone();
+    threshold(processedImage, processedImage, 0, 255, THRESH_BINARY);
+    cvtColor(processedImage, processedImage, CV_GRAY2BGR);
+    if (imgCount == 30) {
+        vector<int> compression_params;
+        compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+        compression_params.push_back(9);
+        imwrite("/tmp/image.png", processedImage, compression_params);
+        imgCount = 0;
+    }
+    else {
+        imgCount++;
+    }
+
     if (contours.size() < 2) {
         return res; //return the default result (failure)
     }
@@ -164,14 +178,6 @@ VisionResultsPackage calculate(const Mat &bgr){
     Point resultPoint;
 	resultPoint.y = (y1+y2)/2;
 	resultPoint.x = (x1+x2)/2;
-
-    if (imgCount == 0) {
-        vector<int> compression_params;
-        compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
-        compression_params.push_back(9);
-        imwrite("/tmp/image.png", bgr, compression_params);
-        imgCount++;
-    }
 
     //create the results package
     res.valid = true;
