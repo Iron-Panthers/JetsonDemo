@@ -23,7 +23,7 @@ struct VisionResultsPackage {
     string createCSVLine () {
         if (!valid) {
             stringstream ss;
-            ss << "INVALID";
+            ss << timestamp << "," << valid << ",0,0,0";
             return ss.str();
         } else {
             stringstream ss;

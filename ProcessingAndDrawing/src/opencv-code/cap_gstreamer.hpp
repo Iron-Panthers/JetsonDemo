@@ -57,7 +57,6 @@ public:
     GstElement *writePipeline;
     gint width;
     gint height;
-    GstMapInfo *info;
     int frameCount;
 
   protected:

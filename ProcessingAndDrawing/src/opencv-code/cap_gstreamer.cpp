@@ -221,12 +221,14 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
             return GST_FLOW_ERROR;
         }
 
-        gst_buffer_map(buffer, obj->info, (GstMapFlags)GST_MAP_READ);
-        cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)obj->info->data);
-        VisionResultsPackage res = calculate(frameMat);
-        NetTableManager::getInstance()->pushToNetworkTables(res);
+        GstMapInfo info;
+        gst_buffer_map(buffer, &info, (GstMapFlags)GST_MAP_READ);
+        // cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)info->data);
+        // VisionResultsPackage res = calculate(frameMat);
+        // NetTableManager::getInstance()->pushToNetworkTables(res);
 
-        gst_buffer_unmap(buffer, obj->info);
+        gst_buffer_unmap(buffer, &info);
+        // // gst_buffer_unref(buffer);
         gst_sample_unref(sample);
 
         return GST_FLOW_OK;
