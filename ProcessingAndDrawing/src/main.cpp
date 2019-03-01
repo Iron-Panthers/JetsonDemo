@@ -9,8 +9,8 @@
 using namespace std;
 
 //camera parameters
-int device = 1;
-const char* deviceName = "/dev/video1";
+int device = 0;
+const char* deviceName = "/dev/video0";
 int width = 640;
 int height = 480;
 int framerate = 30;

@@ -12,7 +12,7 @@ using namespace std;
 
 struct VisionResultsPackage {
     i64 timestamp;
-    bool valid;
+    bool valid = false;
 	cv::Point robotPos;
 	double robotAngle;
 
@@ -21,9 +21,15 @@ struct VisionResultsPackage {
     }
 
     string createCSVLine () {
-        stringstream ss;
-        ss << timestamp << "," << valid << "," << robotPos.x << "," << robotPos.y << "," << robotAngle;
-        return ss.str();
+        if (!valid) {
+            stringstream ss;
+            ss << "INVALID";
+            return ss.str();
+        } else {
+            stringstream ss;
+            ss << timestamp << "," << valid << "," << robotPos.x << "," << robotPos.y << "," << robotAngle;
+            return ss.str();
+        }
     }
 };
 

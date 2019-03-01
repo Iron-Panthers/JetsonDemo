@@ -95,6 +95,7 @@ void CvCapture_GStreamer::init()
     width = -1;
     height = -1;
     fps = -1;
+    frameCount = 0;
 }
 
 /*!
@@ -211,8 +212,9 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
     GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(sink));
     if (sample)
     {
-        cout << "NEW SAMPLE" << endl;
-
+        obj->frameCount++;
+        cout << obj->frameCount << endl;
+        
         GstBuffer *buffer = gst_sample_get_buffer(sample);
         if (!buffer) {
             cout << "no buffer" << endl;
@@ -224,12 +226,15 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
         VisionResultsPackage res = calculate(frameMat);
         NetTableManager::getInstance()->pushToNetworkTables(res);
 
+        gst_buffer_unmap(buffer, obj->info);
+        gst_sample_unref(sample);
+
         return GST_FLOW_OK;
     } else {
         cout << "GRAB FAIL" << endl;
     }
 
-    return GST_FLOW_ERROR;
+    return GST_FLOW_ERROR;    
 }
 
 bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int height, int framerate, int bitrate, const char *ip, int port)
@@ -243,19 +248,27 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
 
     GstElement *camSource = gst_element_factory_make("v4l2src", "cv_src");
     g_object_set(camSource, "device", device, NULL);
-    GstElement *tee = gst_element_factory_make("tee", "t");
-
-    GstElement *xraw = gst_element_factory_make("capsfilter", NULL);
+    GstElement *xraw = gst_element_factory_make("capsfilter", "xraw");
     GstCaps *xrawCap = gst_caps_new_simple("video/x-raw",
-                                           "width", G_TYPE_INT, width, 
+                                           "width", G_TYPE_INT, width,
                                            "height", G_TYPE_INT, height,
-                                           "framerate", GST_TYPE_FRACTION, framerate, 1, 
+                                           "framerate", GST_TYPE_FRACTION, framerate, 1,
                                            NULL);
     g_object_set(xraw, "caps", xrawCap, NULL);
     gst_caps_unref(xrawCap);
-
+    GstElement *tee = gst_element_factory_make("tee", "t");
 
     GstElement *queue_cv = gst_element_factory_make("queue", NULL);
+    GstElement *cv_convert = gst_element_factory_make("videoconvert", NULL);
+    GstElement *cv_xraw = gst_element_factory_make("capsfilter", "cv_xraw");
+    GstCaps *cv_xrawCap = gst_caps_new_simple("video/x-raw",
+                                           "width", G_TYPE_INT, width,
+                                           "height", G_TYPE_INT, height,
+                                           "framerate", GST_TYPE_FRACTION, framerate, 1,
+                                           "format", G_TYPE_STRING, "BGR",
+                                           NULL);
+    g_object_set(cv_xraw, "caps", cv_xrawCap, NULL);
+    gst_caps_unref(cv_xrawCap);
     GstElement *sink_cv = gst_element_factory_make("appsink", NULL);
     this->sink = sink_cv;
     GstAppSink *sank = GST_APP_SINK(gst_object_ref(sink_cv));
@@ -271,21 +284,22 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
     GstElement *sink_udp = gst_element_factory_make("udpsink", NULL);
     g_object_set(sink_udp, "host", ip, "port", port, NULL);
 
-    if (!camSource || !xraw || !tee || !queue_cv || !sink_cv || !queue_udp || !enc_udp || !rtp_udp || !sink_udp) {
+    if (!camSource || !xraw || !tee || !queue_cv || !cv_convert || !cv_xraw || !sink_cv || !queue_udp || !enc_udp || !rtp_udp || !sink_udp)
+    {
         cout << "didnt create" << endl;
     }
 
-    gst_bin_add_many(GST_BIN(pipeline), camSource, xraw, tee, queue_cv, sink_cv, queue_udp, enc_udp, rtp_udp, sink_udp, NULL);
-    if (!gst_element_link_many(camSource, tee, NULL)) {
+    gst_bin_add_many(GST_BIN(pipeline), camSource, xraw, tee, queue_cv, cv_convert, cv_xraw, sink_cv, queue_udp, enc_udp, rtp_udp, sink_udp, NULL);
+    if (!gst_element_link_many(camSource, xraw, tee, NULL)) {
         cout << "didnt link start" << endl;
         return false;
     }
-    if (!gst_element_link_many(tee, queue_udp, xraw, enc_udp, rtp_udp, sink_udp, NULL))
+    if (!gst_element_link_many(tee, queue_udp, enc_udp, rtp_udp, sink_udp, NULL))
     {
         cout << "didnt link udp" << endl;
         return false;
     }
-    if (!gst_element_link_many(tee, queue_cv, sink_cv, NULL))
+    if (!gst_element_link_many(tee, queue_cv, cv_convert, cv_xraw, sink_cv, NULL))
     {
         cout << "didnt link cv" << endl;
         return false;

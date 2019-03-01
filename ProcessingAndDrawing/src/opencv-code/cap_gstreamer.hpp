@@ -58,6 +58,7 @@ public:
     gint width;
     gint height;
     GstMapInfo *info;
+    int frameCount;
 
   protected:
     void init();
