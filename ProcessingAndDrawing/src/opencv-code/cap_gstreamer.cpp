@@ -223,9 +223,9 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
 
         GstMapInfo info;
         gst_buffer_map(buffer, &info, (GstMapFlags)GST_MAP_READ);
-        // cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)info->data);
-        // VisionResultsPackage res = calculate(frameMat);
-        // NetTableManager::getInstance()->pushToNetworkTables(res);
+        cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)info.data);
+        VisionResultsPackage res = calculate(frameMat);
+        NetTableManager::getInstance()->pushToNetworkTables(res);
 
         gst_buffer_unmap(buffer, &info);
         // // gst_buffer_unref(buffer);
