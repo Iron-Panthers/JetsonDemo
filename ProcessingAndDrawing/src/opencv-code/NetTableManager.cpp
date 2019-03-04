@@ -2,7 +2,7 @@
 #include "helper.hpp"
 
 static string tableName = "CVResultsTable"; // name of the table
-string netTableAddress = "192.168.1.34"; //address of the rio
+string netTableAddress = "10.50.26.2"; //address of the rio
 NetTableManager* NetTableManager::instance = 0;
 
 NetTableManager::NetTableManager()
@@ -11,6 +11,7 @@ NetTableManager::NetTableManager()
     NetworkTable::SetClientMode();
     NetworkTable::SetDSClientEnabled(false);
     NetworkTable::SetIPAddress(llvm::StringRef(netTableAddress));
+    NetworkTable::SetPort(1735);
     NetworkTable::Initialize();
     printf("Initialized table\n");
     networkTable = NetworkTable::GetTable(tableName);

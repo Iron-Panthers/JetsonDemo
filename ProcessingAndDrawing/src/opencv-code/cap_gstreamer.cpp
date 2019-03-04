@@ -213,7 +213,7 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
     if (sample)
     {
         obj->frameCount++;
-        cout << obj->frameCount << endl;
+        // cout << obj->frameCount << endl;
         
         GstBuffer *buffer = gst_sample_get_buffer(sample);
         if (!buffer) {
@@ -225,7 +225,7 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
         gst_buffer_map(buffer, &info, (GstMapFlags)GST_MAP_READ);
         cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)info.data);
         VisionResultsPackage res = calculate(frameMat);
-        NetTableManager::getInstance()->pushToNetworkTables(res);
+        // NetTableManager::getInstance()->pushToNetworkTables(res);
 
         gst_buffer_unmap(buffer, &info);
         // // gst_buffer_unref(buffer);
