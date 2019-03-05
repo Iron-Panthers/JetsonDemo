@@ -2,6 +2,7 @@
 #define CAP_GSTREAMER_HPP
 
 #include "precomp.hpp"
+#include "vision.hpp"
 #include <unistd.h>
 #include <string.h>
 #include <gst/gst.h>
@@ -66,7 +67,7 @@ public:
     void startPipeline();
     void stopPipeline();
     void restartPipeline();
-    
+
     GstElement *uridecodebin;
     GstElement*   appSrc;
     GstElement*   v4l2src;

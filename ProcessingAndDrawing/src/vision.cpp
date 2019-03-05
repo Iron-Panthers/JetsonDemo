@@ -18,9 +18,9 @@ int MAX_VAL = 255;
 
 Scalar threshMin = Scalar(MIN_HUE, MIN_SAT, MIN_VAL);
 Scalar threshMax = Scalar(MAX_HUE, MAX_SAT, MAX_VAL);
-
-float MIN_DENSITY = 0.75;
-int CONTOURS_TO_CHECK = 5;
+float minArea = 1500;
+float maxAreaRatio = 8;
+float minDensity = 0.75;
 
 float h = 5.14192; // height in inches of tape that we compare to
 float w = 11.739; //  width in inches of target that we compare to
@@ -36,6 +36,17 @@ float dData[5] = {-0.0614758, -0.10311039, 0.00629035, -0.00674438, 0.47869622};
 Mat intrinsic = Mat(Size(3,3), CV_32F, iData);
 Mat distCoeffs = Mat(Size(1,5), CV_32F, dData);
 
+float a = 14.5 / 180.0 * PI;
+float l = 2.0;
+
+Point3f topLeft3(-w/2, 0, 0);
+Point3f innerLeft3(-w/2 + l * cos(a), -l *sin(a), 0);
+Point3f topRight3(w/2, 0, 0);
+Point3f innerRight3(w/2 - l * cos(a), -l *sin(a), 0);
+std::vector<Point3f> objPoints = {topLeft3,innerLeft3,topRight3,innerRight3};
+
+VisionResultsPackage last;
+
 bool sortContour(contour_type a, contour_type b)
 {
     double aArea = contourArea(a, FALSE);
@@ -48,14 +59,13 @@ VisionResultsPackage calculate(const Mat &bgr){
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
 
-    Mat bgrFixed = Mat(bgr.size(), CV_8UC3);
-    undistort(bgr, bgrFixed, intrinsic, distCoeffs);
+    // blur(bgr, bgr, Size(3, 3));
 
     //convert to hsv
     Mat hsvMat;
-    cvtColor(bgrFixed, hsvMat, COLOR_BGR2HSV);
+    cvtColor(bgr, hsvMat, COLOR_BGR2HSV);
 
-    //threshold on green (light ring color), high saturation, high brightness
+    //threshold on green (light ring color), any saturation, high brightness
     Mat threshedImg;
     inRange(hsvMat, threshMin, threshMax, threshedImg);
 
@@ -72,63 +82,89 @@ VisionResultsPackage calculate(const Mat &bgr){
     // sort by size in descending order
     std::sort(contours.begin(), contours.end(), sortContour);
 
-    // go thru the top CONTOURS_TO_CHECK contours, or as many as possible if we don't have that many
+    // find 2 biggest contours with area > minArea
     int contoursSize = static_cast<int>(contours.size());
-    // cout << "n contours  " << contoursSize << endl;
-    int numContours = std::min(CONTOURS_TO_CHECK, contoursSize);
-    RotatedRect rect1;
-    bool foundRect1 = false;
-    RotatedRect rect2;
-    bool foundRect2 = false;
-    for (int i = 0; i < numContours; i++) {
+
+    contour_type cont1;
+    float cont1Area = 0;
+    bool found1 = false;
+    contour_type cont2;
+    bool found2 = false;
+    for (int i = 0; i < contoursSize; i++) {
         contour_type cont = contours[i];
-        double totalArea = contourArea(cont, FALSE);
-        // cout << "contour " << i << " area = " << totalArea << endl;
-        RotatedRect rect = minAreaRect(cont);
-        double rectArea = rect.size.width * rect.size.height;
-        double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
-        if (density >= MIN_DENSITY) {
-            if (!foundRect1) {
-                foundRect1 = true;
-                rect1 = rect;
-            } else {
-                foundRect2 = true;
-                rect2 = rect;
-                i = numContours; // if we found both contours we're done
+        float totalArea = contourArea(cont, FALSE);
+        contour_type convexHull;
+        cv::convexHull(cont, convexHull, false);
+        float hullArea = contourArea(convexHull, FALSE);
+        float density = totalArea / hullArea;
+        if (totalArea > minArea && density > minDensity) {
+            if (!found1) {
+                found1 = true;
+                cont1 = convexHull;
+                cont1Area = totalArea;
+            } else if (!found2 && cont1Area / totalArea < maxAreaRatio) {
+                found2 = true;
+                cont2 = convexHull;
+                i = contoursSize;
             }
+        } else if (totalArea < minArea) {
+            i = contoursSize;
         }
     }
 
-    if (!foundRect1 || !foundRect2) { //  if we ended without both contours we exit
+    if (!found1 || !found2) { //  if we ended without both contours we exit
         return res; // with failure result
     }
 
-    Point2f leftRect[4];
-    Point2f rightRect[4];
-    if (rect1.center.x < rect2.center.x) {
-        rect1.points(leftRect);
-        rect2.points(rightRect);
+    Moments m1 = moments(cont1, true);
+    Moments m2 = moments(cont2, true);
+    Point c1(m1.m10 / m1.m00, m1.m01 / m1.m00);
+    Point c2(m2.m10 / m2.m00, m2.m01 / m2.m00);
+    float theta = ((c1.x + c2.x) / 2.0) * s_x / W;
+
+    contour_type leftTarget;
+    contour_type rightTarget;
+    if (c1.x < c2.x) {
+        leftTarget = cont1;
+        rightTarget = cont2;
     } else {
-        rect2.points(leftRect);
-        rect1.points(rightRect);
+        leftTarget = cont2;
+        rightTarget = cont1;
     }
-    float leftX[4];
-    float leftY[4];
-    float rightX[4];
-    float rightY[4];
-    for (int i = 0; i < 4; i++) {
-        leftX[i] = leftRect[i].x;
-        leftY[i] = leftRect[i].y;
-        rightX[i] = rightRect[i].x;
-        rightY[i] = rightRect[i].y;
+
+    int nLeft = static_cast<int>(leftTarget.size());
+    int nRight = static_cast<int>(rightTarget.size());
+
+    Point2f topLeft(0, H);
+    Point2f innerLeft(0, 0);
+    for (int i = 0; i < nLeft; i++) {
+        Point2f p = leftTarget[i];
+        if (p.x > innerLeft.x) {
+            innerLeft = p;
+        }
+        if (p.y < topLeft.y) {
+            topLeft = p;
+        }
+    }
+
+    Point2f topRight(0, H);
+    Point2f innerRight(W, 0);
+    for (int i = 0; i < nRight; i++) {
+        Point2f p = rightTarget[i];
+        if (p.x < innerRight.x) {
+            innerRight = p;
+        }
+        if (p.y < topRight.y) {
+            topRight = p;
+        }
     }
 
     Mat processedImage = threshedImg.clone();
     threshold(processedImage, processedImage, 0, 255, THRESH_BINARY);
-    for (int i = 0; i < 4; i++) {
-        circle(processedImage, leftRect[i], 4, Scalar(255, 255, 255), 4);
-        circle(processedImage, rightRect[i], 4, Scalar(255, 255, 255), 4);
-    }
+    circle(processedImage, topLeft, 2, Scalar(190, 190, 190), 2);
+    circle(processedImage, innerLeft, 2, Scalar(190, 190, 190), 2);
+    circle(processedImage, topRight, 2, Scalar(190, 190, 190), 2);
+    circle(processedImage, innerRight, 2, Scalar(190, 190, 190), 2);
     cvtColor(processedImage, processedImage, CV_GRAY2BGR);
     if (imgCount == 30)
     {
@@ -143,59 +179,23 @@ VisionResultsPackage calculate(const Mat &bgr){
         imgCount++;
     }
 
-    int leftMinY = distance(leftY, min_element(leftY, leftY+4));
-    int rightMinY = distance(rightY, min_element(rightY, rightY+4));
-    int leftMinX = distance(leftX, min_element(leftX, leftX+4));
-    int rightMaxX = distance(rightX, max_element(rightX, rightX+4));
+    std::vector<Point2f> imgPoints = {topLeft, innerLeft, topRight, innerRight};
+    solvePnP(objPoints, imgPoints, intrinsic, distCoeffs, last.rvec, last.tvec, true, CV_P3P);
+    Mat R(3,3,CV_64F);
+    Rodrigues(last.rvec, R);
+    R = R.t();
+    Mat pos = -R * last.tvec;
 
-    Point2f topLeft = leftRect[leftMinY];
-    Point2f leftLeft = leftRect[leftMinX];
-    Point2f topRight = rightRect[rightMinY];
-    Point2f rightRight = rightRect[rightMaxX];
-
-    float leftHeight = leftLeft.y - topLeft.y;
-    float rightHeight = rightRight.y - topRight.y;
-    float width = topRight.x - topLeft.x;
-    float centerX = (rect1.center.x + rect2.center.x) / 2.0;
-    float thetaPixels = centerX - W/2;
-    float theta = thetaPixels * s_x / W;
-
-    float a1 = leftHeight * s_y / H;
-    float a2 = rightHeight * s_y / H;
-    float r1 = h / tan(a2 - p);
-    float r2 = h / tan(a1 - p);
-
-    cout << theta << "," << width << endl;
-
-    float t = width * s_x / W;
-    float bx = r1*cos(t);
-	float by = r1*sin(t);
-	float cx = r2;
-	float cy = 0;
-
-    float sAB = sqrt(bx*bx + by*by);
-	float sAC = sqrt(cx*cx + cy*cy);
-	float sBC = sqrt((cx-bx)*(cx-bx) + (cy-by)*(cy-by));
-
-    float aB = acos((bx*(bx-cx)+by*(by-cy)) / (sAB*sBC));
-	float aC = acos((cx*(cx-bx)+cy*(cy-by)) / (sAC*sBC));
-
-	float y1 = r1*sin(aB);
-	float y2 = r2*sin(aC);
-
-	float x1 = w/2 - r1*cos(aB);
-	float x2 = r2*cos(aC) - w/2;
-
-    Point2f resultPoint;
-	resultPoint.y = (y1+y2)/2.0;
-	resultPoint.x = (x1+x2)/2.0;
-
-    // cout << resultPoint.x << ", " << resultPoint.y << ", " << theta << endl;
+    cout << R << endl;
 
     //create the results package
     res.valid = true;
     res.timestamp = time_began;
     res.robotAngle = theta;
-    res.robotPos = resultPoint;
+    res.robotPos.x = pos.at<float>(0, 0);
+    res.robotPos.y = pos.at<float>(0, 2);
+
+    cout << res.robotPos.x << ", " << res.robotPos.y << ", " << theta << endl;
+
     return res;
 }
