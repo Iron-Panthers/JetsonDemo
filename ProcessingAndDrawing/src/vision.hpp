@@ -11,10 +11,10 @@
 struct VisionResultsPackage {
     long long timestamp;
     bool valid = false;
-	cv::Point robotPos;
+	cv::Point2f robotPos;
 	double robotAngle;
-    cv::Mat rvec = cv::Mat(3, 3, CV_64F);
-    cv::Mat tvec = cv::Mat(1, 3, CV_64F);
+    cv::Mat rvec;
+    cv::Mat tvec;
 
     static std::string createCSVHeader () {
         return "Timestamp, Valid, X, Y, Theta";

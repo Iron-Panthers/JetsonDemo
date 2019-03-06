@@ -18,7 +18,7 @@ int MAX_VAL = 255;
 
 Scalar threshMin = Scalar(MIN_HUE, MIN_SAT, MIN_VAL);
 Scalar threshMax = Scalar(MAX_HUE, MAX_SAT, MAX_VAL);
-float minArea = 1500;
+float minArea = 300;
 float maxAreaRatio = 8;
 float minDensity = 0.75;
 
@@ -33,6 +33,7 @@ float s_y = s_x /  W * H; // FOV in y axis of camera  in radians
 
 float iData[9] = {559.57544781, 0.0, 287.88704838, 0.0, 558.25711671, 253.80973506, 0.0, 0.0, 1.0};
 float dData[5] = {-0.0614758, -0.10311039, 0.00629035, -0.00674438, 0.47869622};
+
 Mat intrinsic = Mat(Size(3,3), CV_32F, iData);
 Mat distCoeffs = Mat(Size(1,5), CV_32F, dData);
 
@@ -85,26 +86,25 @@ VisionResultsPackage calculate(const Mat &bgr){
     // find 2 biggest contours with area > minArea
     int contoursSize = static_cast<int>(contours.size());
 
-    contour_type cont1;
+    RotatedRect cont1;
     float cont1Area = 0;
     bool found1 = false;
-    contour_type cont2;
+    RotatedRect cont2;
     bool found2 = false;
     for (int i = 0; i < contoursSize; i++) {
         contour_type cont = contours[i];
         float totalArea = contourArea(cont, FALSE);
-        contour_type convexHull;
-        cv::convexHull(cont, convexHull, false);
-        float hullArea = contourArea(convexHull, FALSE);
+        RotatedRect rect = minAreaRect(cont);
+        float hullArea = rect.size.width * rect.size.height;
         float density = totalArea / hullArea;
         if (totalArea > minArea && density > minDensity) {
             if (!found1) {
                 found1 = true;
-                cont1 = convexHull;
+                cont1 = rect;
                 cont1Area = totalArea;
             } else if (!found2 && cont1Area / totalArea < maxAreaRatio) {
                 found2 = true;
-                cont2 = convexHull;
+                cont2 = rect;
                 i = contoursSize;
             }
         } else if (totalArea < minArea) {
@@ -116,48 +116,41 @@ VisionResultsPackage calculate(const Mat &bgr){
         return res; // with failure result
     }
 
-    Moments m1 = moments(cont1, true);
-    Moments m2 = moments(cont2, true);
-    Point c1(m1.m10 / m1.m00, m1.m01 / m1.m00);
-    Point c2(m2.m10 / m2.m00, m2.m01 / m2.m00);
-    float theta = ((c1.x + c2.x) / 2.0) * s_x / W;
+    float theta = ((cont1.center.x + cont2.center.x) / 2.0) * s_x / W;
 
-    contour_type leftTarget;
-    contour_type rightTarget;
-    if (c1.x < c2.x) {
-        leftTarget = cont1;
-        rightTarget = cont2;
-    } else {
-        leftTarget = cont2;
-        rightTarget = cont1;
+    Point2f leftRect[4];
+    Point2f rightRect[4];
+    if (cont1.center.x < cont2.center.x)
+    {
+        cont1.points(leftRect);
+        cont2.points(rightRect);
+    }
+    else
+    {
+        cont2.points(leftRect);
+        cont1.points(rightRect);
+    }
+    float leftX[4];
+    float leftY[4];
+    float rightX[4];
+    float rightY[4];
+    for (int i = 0; i < 4; i++)
+    {
+        leftX[i] = leftRect[i].x;
+        leftY[i] = leftRect[i].y;
+        rightX[i] = rightRect[i].x;
+        rightY[i] = rightRect[i].y;
     }
 
-    int nLeft = static_cast<int>(leftTarget.size());
-    int nRight = static_cast<int>(rightTarget.size());
+    int leftMinY = distance(leftY, min_element(leftY, leftY + 4));
+    int rightMinY = distance(rightY, min_element(rightY, rightY + 4));
+    int leftMaxX = distance(leftX, max_element(leftX, leftX + 4));
+    int rightMinX = distance(rightX, min_element(rightX, rightX + 4));
 
-    Point2f topLeft(0, H);
-    Point2f innerLeft(0, 0);
-    for (int i = 0; i < nLeft; i++) {
-        Point2f p = leftTarget[i];
-        if (p.x > innerLeft.x) {
-            innerLeft = p;
-        }
-        if (p.y < topLeft.y) {
-            topLeft = p;
-        }
-    }
-
-    Point2f topRight(0, H);
-    Point2f innerRight(W, 0);
-    for (int i = 0; i < nRight; i++) {
-        Point2f p = rightTarget[i];
-        if (p.x < innerRight.x) {
-            innerRight = p;
-        }
-        if (p.y < topRight.y) {
-            topRight = p;
-        }
-    }
+    Point2f topLeft = leftRect[leftMinY];
+    Point2f innerLeft = leftRect[leftMaxX];
+    Point2f topRight = rightRect[rightMinY];
+    Point2f innerRight = rightRect[rightMinX];
 
     Mat processedImage = threshedImg.clone();
     threshold(processedImage, processedImage, 0, 255, THRESH_BINARY);
@@ -185,17 +178,20 @@ VisionResultsPackage calculate(const Mat &bgr){
     Rodrigues(last.rvec, R);
     R = R.t();
     Mat pos = -R * last.tvec;
+    Point3d posPoint(pos);
 
-    cout << R << endl;
+    // cout << last.rvec << endl;
+    cout << last.tvec << endl;
 
     //create the results package
     res.valid = true;
     res.timestamp = time_began;
     res.robotAngle = theta;
-    res.robotPos.x = pos.at<float>(0, 0);
-    res.robotPos.y = pos.at<float>(0, 2);
+    res.robotPos.x = posPoint.x;
+    res.robotPos.y = posPoint.z;
 
-    cout << res.robotPos.x << ", " << res.robotPos.y << ", " << theta << endl;
+    // cout << posPoint << endl;
+    // cout << res.robotPos.x << ", " << res.robotPos.y << ", " << theta << endl;
 
     return res;
 }
