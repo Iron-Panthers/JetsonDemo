@@ -21,14 +21,15 @@ Scalar threshMax = Scalar(MAX_HUE, MAX_SAT, MAX_VAL);
 
 float MIN_DENSITY = 0.75;
 int CONTOURS_TO_CHECK = 5;
+int pos_thresh = 0;
 
-float h = 5.14192; // height in inches of tape that we compare to
+float h = 5.2; //5.14192; //0.50076; // height in inches of tape that we compare to
 float w = 11.739; //  width in inches of target that we compare to
 
 float p = 0.0;   // angle of camera relative to ground // 0.2788 for real robit
 float W = 640.0; // width of each frame
 float H = 480.0; // height of each frame
-float s_x = 63.0/180.0 * PI; // FOV in x axis of camera in radians
+float s_x = 60.0/180.0 * PI; // FOV in x axis of camera in radians
 float s_y = s_x /  W * H; // FOV in y axis of camera  in radians
 
 float iData[9] = {559.57544781, 0.0, 287.88704838, 0.0, 558.25711671, 253.80973506, 0.0, 0.0, 1.0};
@@ -48,12 +49,12 @@ VisionResultsPackage calculate(const Mat &bgr){
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
 
-    Mat bgrFixed = Mat(bgr.size(), CV_8UC3);
-    undistort(bgr, bgrFixed, intrinsic, distCoeffs);
+    // Mat bgrFixed = Mat(bgr.size(), CV_8UC3);
+    // undistort(bgr, bgrFixed, intrinsic, distCoeffs);
 
     //convert to hsv
     Mat hsvMat;
-    cvtColor(bgrFixed, hsvMat, COLOR_BGR2HSV);
+    cvtColor(bgr, hsvMat, COLOR_BGR2HSV);
 
     //threshold on green (light ring color), high saturation, high brightness
     Mat threshedImg;
@@ -76,9 +77,9 @@ VisionResultsPackage calculate(const Mat &bgr){
     int contoursSize = static_cast<int>(contours.size());
     // cout << "n contours  " << contoursSize << endl;
     int numContours = std::min(CONTOURS_TO_CHECK, contoursSize);
-    RotatedRect rect1;
+    contour_type cont1;
     bool foundRect1 = false;
-    RotatedRect rect2;
+    contour_type cont2;
     bool foundRect2 = false;
     for (int i = 0; i < numContours; i++) {
         contour_type cont = contours[i];
@@ -90,10 +91,10 @@ VisionResultsPackage calculate(const Mat &bgr){
         if (density >= MIN_DENSITY) {
             if (!foundRect1) {
                 foundRect1 = true;
-                rect1 = rect;
+                cont1 = cont;
             } else {
                 foundRect2 = true;
-                rect2 = rect;
+                cont2 = cont;
                 i = numContours; // if we found both contours we're done
             }
         }
@@ -103,33 +104,79 @@ VisionResultsPackage calculate(const Mat &bgr){
         return res; // with failure result
     }
 
-    Point2f leftRect[4];
-    Point2f rightRect[4];
-    if (rect1.center.x < rect2.center.x) {
-        rect1.points(leftRect);
-        rect2.points(rightRect);
+    Moments m1 = moments(cont1);
+    Moments m2 = moments(cont2);
+    float cx1 = m1.m10 / m1.m00;
+    float cx2 = m2.m10 / m2.m00;
+    contour_type leftPoints;
+    contour_type rightPoints;
+
+    if (cx1 < cx2) {
+        leftPoints = cont1;
+        rightPoints = cont2;
+        // approxPolyDP(cont1, leftPoints, 2, true);
+        // approxPolyDP(cont2, rightPoints, 2, true);
     } else {
-        rect2.points(leftRect);
-        rect1.points(rightRect);
-    }
-    float leftX[4];
-    float leftY[4];
-    float rightX[4];
-    float rightY[4];
-    for (int i = 0; i < 4; i++) {
-        leftX[i] = leftRect[i].x;
-        leftY[i] = leftRect[i].y;
-        rightX[i] = rightRect[i].x;
-        rightY[i] = rightRect[i].y;
+        leftPoints = cont2;
+        rightPoints = cont1;
+        // approxPolyDP(cont2, leftPoints, 2, true);
+        // approxPolyDP(cont1, rightPoints, 2, true);
     }
 
-    Mat processedImage = threshedImg.clone();
-    threshold(processedImage, processedImage, 0, 255, THRESH_BINARY);
-    for (int i = 0; i < 4; i++) {
-        circle(processedImage, leftRect[i], 4, Scalar(255, 255, 255), 4);
-        circle(processedImage, rightRect[i], 4, Scalar(255, 255, 255), 4);
+    int leftSize = static_cast<int>(leftPoints.size());
+    int rightSize = static_cast<int>(rightPoints.size());
+
+    float leftX[leftSize];
+    float leftY[leftSize];
+    float rightX[rightSize];
+    float rightY[rightSize];
+    for (int i = 0; i < leftSize; i++) {
+        leftX[i] = leftPoints[i].x;
+        leftY[i] = leftPoints[i].y;
     }
-    cvtColor(processedImage, processedImage, CV_GRAY2BGR);
+    for (int i = 0; i < rightSize; i++)
+    {
+        rightX[i] = rightPoints[i].x;
+        rightY[i] = rightPoints[i].y;
+    }
+
+    int leftMinY = leftY[distance(leftY, min_element(leftY, leftY+leftSize))] + pos_thresh;
+    int rightMinY = rightY[distance(rightY, min_element(rightY, rightY+rightSize))] + pos_thresh;
+    int leftMinX = leftX[distance(leftX, min_element(leftX, leftX+leftSize))] + pos_thresh;
+    int rightMaxX = rightX[distance(rightX, max_element(rightX, rightX+rightSize))] - pos_thresh;
+
+    Point2f topLeft(W, 0);
+    Point2f outerLeft(0, 0);
+    for (int i = 0; i < leftSize; i++) {
+        Point2f p = leftPoints[i];
+        if (p.y <= leftMinY && p.x < topLeft.x) {
+            topLeft = p;
+        }
+        if (p.x <= leftMinX && p.y > outerLeft.y) {
+            outerLeft = p;
+        }
+    }
+
+    Point2f topRight(0, 0);
+    Point2f outerRight(0, 0);
+    for (int i = 0; i < rightSize; i++)
+    {
+        Point2f p = rightPoints[i];
+        if (p.y <= rightMinY && p.x > topRight.x)
+        {
+            topRight = p;
+        }
+        if (p.x >= rightMaxX && p.y > outerRight.y)
+        {
+            outerRight = p;
+        }
+    }
+
+    Mat processedImage = bgr.clone();
+    processedImage.at<Vec3b>(topLeft) = Vec3b(0, 255, 0);
+    processedImage.at<Vec3b>(outerLeft) = Vec3b(0, 255, 0);
+    processedImage.at<Vec3b>(topRight) = Vec3b(0, 255, 0);
+    processedImage.at<Vec3b>(outerRight) = Vec3b(0, 255, 0);
     if (imgCount == 30)
     {
         vector<int> compression_params;
@@ -143,31 +190,28 @@ VisionResultsPackage calculate(const Mat &bgr){
         imgCount++;
     }
 
-    int leftMinY = distance(leftY, min_element(leftY, leftY+4));
-    int rightMinY = distance(rightY, min_element(rightY, rightY+4));
-    int leftMinX = distance(leftX, min_element(leftX, leftX+4));
-    int rightMaxX = distance(rightX, max_element(rightX, rightX+4));
+    float leftHeight = outerLeft.y - topLeft.y;
+    float rightHeight = outerRight.y - topRight.y;
 
-    Point2f topLeft = leftRect[leftMinY];
-    Point2f leftLeft = leftRect[leftMinX];
-    Point2f topRight = rightRect[rightMinY];
-    Point2f rightRight = rightRect[rightMaxX];
+    cout << leftHeight << "," << rightHeight << endl;
 
-    float leftHeight = leftLeft.y - topLeft.y;
-    float rightHeight = rightRight.y - topRight.y;
     float width = topRight.x - topLeft.x;
-    float centerX = (rect1.center.x + rect2.center.x) / 2.0;
+    float centerX = (cx1 + cx2) / 2.0;
     float thetaPixels = centerX - W/2;
     float theta = thetaPixels * s_x / W;
 
     float a1 = leftHeight * s_y / H;
     float a2 = rightHeight * s_y / H;
+
+    cout << "a1 = " << a1 << ", a2 = " << a2 << endl;
+
     float r1 = h / tan(a2 - p);
     float r2 = h / tan(a1 - p);
 
-    cout << theta << "," << width << endl;
+    cout << "r1 = " << r1 << ", r2 = " << r2 << endl;
 
     float t = width * s_x / W;
+    cout << "t = " << t << endl;
     float bx = r1*cos(t);
 	float by = r1*sin(t);
 	float cx = r2;
@@ -190,7 +234,7 @@ VisionResultsPackage calculate(const Mat &bgr){
 	resultPoint.y = (y1+y2)/2.0;
 	resultPoint.x = (x1+x2)/2.0;
 
-    // cout << resultPoint.x << ", " << resultPoint.y << ", " << theta << endl;
+    cout << resultPoint.x << ", " << resultPoint.y << ", " << theta << endl;
 
     //create the results package
     res.valid = true;
