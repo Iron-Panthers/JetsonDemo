@@ -31,6 +31,7 @@ float W = 640.0; // width of each frame
 float H = 480.0; // height of each frame
 float s_x = 60.0/180.0 * PI; // FOV in x axis of camera in radians
 float s_y = s_x /  W * H; // FOV in y axis of camera  in radians
+float focal_length = (W/2) / tan(s_x/2);
 
 float iData[9] = {559.57544781, 0.0, 287.88704838, 0.0, 558.25711671, 253.80973506, 0.0, 0.0, 1.0};
 float dData[5] = {-0.0614758, -0.10311039, 0.00629035, -0.00674438, 0.47869622};
@@ -190,18 +191,22 @@ VisionResultsPackage calculate(const Mat &bgr){
         imgCount++;
     }
 
-    float leftHeight = outerLeft.y - topLeft.y;
-    float rightHeight = outerRight.y - topRight.y;
+    outerLeft.y -= H/2;
+    outerRight.y -= H/2;
+    topLeft.y -= H/2;
+    topRight.y -= H/2;
 
-    cout << leftHeight << "," << rightHeight << endl;
+    outerLeft.x -= W / 2;
+    outerRight.x -= W / 2;
+    topLeft.x -= W / 2;
+    topRight.x -= W / 2;
 
-    float width = topRight.x - topLeft.x;
+    float a1 = atan(outerLeft.y/focal_length) - atan(topLeft.y/focal_length);
+    float a2 = atan(outerRight.y / focal_length) - atan(topRight.y / focal_length);
+
     float centerX = (cx1 + cx2) / 2.0;
     float thetaPixels = centerX - W/2;
     float theta = thetaPixels * s_x / W;
-
-    float a1 = leftHeight * s_y / H;
-    float a2 = rightHeight * s_y / H;
 
     cout << "a1 = " << a1 << ", a2 = " << a2 << endl;
 
@@ -210,7 +215,7 @@ VisionResultsPackage calculate(const Mat &bgr){
 
     cout << "r1 = " << r1 << ", r2 = " << r2 << endl;
 
-    float t = width * s_x / W;
+    float t = atan(topRight.x / focal_length) - atan(topLeft.x / focal_length);
     cout << "t = " << t << endl;
     float bx = r1*cos(t);
 	float by = r1*sin(t);
