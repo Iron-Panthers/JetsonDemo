@@ -43,4 +43,9 @@ typedef std::vector<cv::Point> contour_type;
  */ 
 VisionResultsPackage calculate(const cv::Mat &bgr);
 
+/**
+ * Creates neural net from given names, config, weights file
+ */
+void createNet(string namesFile, string cfgFile, string weightsFile);
+
 #endif
