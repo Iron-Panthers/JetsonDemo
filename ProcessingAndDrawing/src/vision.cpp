@@ -1,4 +1,5 @@
 #include "vision.hpp"
+#include "darknet.h"
 #include <math.h>
 using namespace std;
 using namespace cv;
