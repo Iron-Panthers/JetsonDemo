@@ -5,11 +5,44 @@ using namespace cv;
 
 float confThreshold = 0.5; // Confidence threshold
 float nmsThreshold = 0.4;  // Non-maximum suppression threshold
-int inpWidth = 640;        // Width of network's input image
-int inpHeight = 480;       // Height of network's input image
 Net net;
 vector<String> names;
 vector<String> classes;
+
+int MIN_HUE = 0;   //55;
+int MAX_HUE = 180; //90;
+
+int MIN_SAT = 0;
+int MAX_SAT = 255;
+
+int MIN_VAL = 220;
+int MAX_VAL = 255;
+
+Scalar threshMin = Scalar(MIN_HUE, MIN_SAT, MIN_VAL);
+Scalar threshMax = Scalar(MAX_HUE, MAX_SAT, MAX_VAL);
+
+float MIN_DENSITY = 0.75;
+int CONTOURS_TO_CHECK = 5;
+int pos_thresh = 0;
+
+float robotHeight = 46.5; //inches
+
+float topHoleHeight = 26.25; //inches
+float holeTopToCamera = robotHeight - topHoleHeight;
+float holeHeight = 13; // inches
+float holeBottomToCamera = holeTopToCamera + holeHeight;
+
+float topHatchHeight = 28; //inches
+float hatchTopToCamera = robotHeight - topHatchHeight;
+float hatchHeight = 16.5; // inches
+float hatchBottomToCamera = hatchTopToCamera + hatchHeight;
+
+float p = 0.0;                 // angle of camera relative to ground // 0.2788 for real robit
+float W = 640.0;               // width of each frame
+float H = 480.0;               // height of each frame
+float s_x = 60.0 / 180.0 * PI; // FOV in x axis of camera in radians
+float s_y = s_x / W * H;       // FOV in y axis of camera  in radians
+float focal_length = (W / 2) / tan(s_x / 2);
 
 void createNet(string namesFile, string cfgFile, string weightsFile) {
     // Load names of classes
@@ -122,11 +155,28 @@ Rect bestHole(vector<int> &boxClasses, vector<float> &confidences, vector<Rect> 
     return bestHole;
 }
 
-double angleToRect(Rect target) {
-    
+float angleToRect(Rect target) {
+    float centerX = target.x + target.width/2 - W/2;
+    float angle = atan(centerX / focal_length);
+    return angle;
 }
 
-Point positionToRect(Rect target) {
+double xErrorToRect(Rect target, float topToCameraDist, float bottomToCameraDist) {
+
+    target.x -= W/2;
+    target.y -= H/2;
+    float topAngle = atan(target.y / focal_length);
+    float bottomAngle = atan((target.y + target.height) /  focal_length);
+
+    // y/x = tan(angle)
+    float rEst1 = topToCameraDist / tan(p + topAngle);
+    float rEst2 = bottomToCameraDist / tan(p + bottomAngle);
+    float r = (rEst1 + rEst2) / 2.0;
+
+    float adjustedHeight = holeHeight / r * focal_length;
+    float distortion = target.width / adjustedHeight;
+
+    return distortion;
 
 } 
 
@@ -136,7 +186,7 @@ VisionResultsPackage calculate(const Mat &bgr) {
     VisionResultsPackage res;
 
     // Create a 4D blob from a frame.
-    blobFromImage(bgr, blob, 1 / 255.0, cvSize(inpWidth, inpHeight), Scalar(0, 0, 0), true, false);
+    blobFromImage(bgr, blob, 1 / 255.0, cvSize(W, H), Scalar(0, 0, 0), true, false);
 
     //Sets the input to the network
     net.setInput(blob);
@@ -154,15 +204,25 @@ VisionResultsPackage calculate(const Mat &bgr) {
     Rect bestHatch = bestHatch(boxClasses, confidences, boxes);
     Rect bestHole = bestHole(boxClasses, confidences, boxes);
 
+    res.hatchValid = false;
+    res.holeValid = false;
+    res.timestamp = time_began;
+    if (bestHatch.width != 0) {
+        res.hatchValid = true;
+        res.hatchAngle = angleToRect(bestHatch);
+        res.hatchDisplace = xErrorToRect(bestHatch, hatchTopToCamera, hatchBottomToCamera);
+    }
+    if (bestHole.width != 0) {
+        res.holeValid = true;
+        res.holeAngle = angleToRect(bestHole);
+        res.holeDisplace = xErrorToRect(bestHole, holeTopToCamera, holeBottomToCamera);
+    }
+
     // Put efficiency information. The function getPerfProfile returns the
     // overall time for inference(t) and the timings for each of the layers(in layersTimes)
     vector<double> layersTimes;
     double freq = getTickFrequency() / 1000;
     double t = net.getPerfProfile(layersTimes) / freq;
 
-    res.valid = true;
-    res.timestamp = time_began;
-    res.robotAngle = theta;
-    res.robotPos = resultPoint;
     return res;
 }
