@@ -59,7 +59,7 @@ vector<contour_type> findContours(const Mat &bgr, Scalar minHSV, Scalar maxHSV,
         }
     }
 
-    if (static_cast<int>(cargo.size()) > 0 && imgCount % 30 == 0) {
+    if (static_cast<int>(contours.size()) > 0 && imgCount % 30 == 0) {
         Mat processedImage = threshedImg.clone();
         threshold(processedImage, processedImage, 0, 255, THRESH_BINARY);
         cvtColor(processedImage, processedImage, CV_GRAY2BGR);
