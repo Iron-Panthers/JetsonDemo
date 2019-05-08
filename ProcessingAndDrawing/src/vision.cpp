@@ -8,8 +8,9 @@ using namespace cv;
 int imgCount = 0;
 
 Scalar cargoMinHSV = Scalar(0, 100, 40);
-Scalar cargoMaxHSV = Scalar(30, 255, 255);
+Scalar cargoMaxHSV = Scalar(20, 255, 255);
 float cargoMinDensity = 0.6;  // a cirlce is 78% area of its bounding square
+float cargoDiameter = 13.0;
 
 float p = 0.0;    // angle of camera relative to ground // 0.2788 for real robit
 float W = 640.0;  // width of each frame
@@ -88,16 +89,25 @@ VisionResultsPackage calculate(const Mat &bgr) {
 
     Rect cargoRect = boundingRect(cargo[0]);
     float rectX = cargoRect.x + cargoRect.width - W / 2;
+    float rectY = cargoRect.y + cargoRect.height - H / 2;
 
     // find angle to cargo
-    double angleToCargo = atan(rectX / focal_length);
+    float angleToCargo = atan(rectX / focal_length);
 
-    cout << "Image " << imgCount << ", Angle: " << angleToCargo << endl;
+    // find distance to cargo
+    float screenRadius = (cargoRect.width + cargoRect.height) / 4.0;
+    float screenDistance = sqrt(rectX*rectX + rectY*rectY);
+    float smallAngle = atan((screenDistance - screenRadius) / focal_length);
+    float bigAngle = atan((screenDistance + screenRadius) / focal_length);
+    float screenAngle = bigAngle - smallAngle;
+    float distanceToCargo = cargoDiameter / 2.0 / tan(screenAngle / 2.0);
+
+    cout << "Image " << imgCount << ", Angle: " << angleToCargo << ", Distance: " << distanceToCargo << endl;
 
     // create the results package
     res.cargoValid = true;
     res.timestamp = time_began;
     res.cargoAngle = angleToCargo;
-    res.cargoDistance = 10;
+    res.cargoDistance = distanceToCargo;
     return res;
 }
