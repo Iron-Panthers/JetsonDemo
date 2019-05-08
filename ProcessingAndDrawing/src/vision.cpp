@@ -64,7 +64,12 @@ VisionResultsPackage calculate(const Mat &bgr)
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
 
-    vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity);
+    Mat hsvMat;
+    cvtColor(bgr, hsvMat, COLOR_BGR2HSV);
+
+    return res;
+
+    // vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity);
 
     if (static_cast<int>(cargo.size()) == 0)
     {
