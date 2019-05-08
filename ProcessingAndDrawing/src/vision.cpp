@@ -41,19 +41,19 @@ vector<contour_type> findContours(const Mat &bgr, Scalar minHSV, Scalar maxHSV, 
     // sort by area in descending order
     std::sort(contours.begin(), contours.end(), sortContour);
 
-    // // remove any vectors with invalid density
-    // for (int i = static_cast<int>(contours.size()); i >= 0; i--) // decrement for no conflict
-    // {
-    //     contour_type cont = contours[i];
-    //     double totalArea = contourArea(cont, FALSE);
-    //     RotatedRect rect = minAreaRect(cont);
-    //     double rectArea = rect.size.width * rect.size.height;
-    //     double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
-    //     if (density < minDensity)
-    //     {
-    //         contours.erase(contours.begin() + i);
-    //     }
-    // }
+    // remove any vectors with invalid density
+    for (int i = static_cast<int>(contours.size())-1; i >= 0; i--) // decrement for no conflict
+    {
+        contour_type cont = contours[i];
+        double totalArea = contourArea(cont, FALSE);
+        RotatedRect rect = minAreaRect(cont);
+        double rectArea = rect.size.width * rect.size.height;
+        double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
+        if (density < minDensity)
+        {
+            contours.erase(contours.begin() + i);
+        }
+    }
 
     return contours;
 }
