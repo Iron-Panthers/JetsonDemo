@@ -64,12 +64,37 @@ VisionResultsPackage calculate(const Mat &bgr)
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
 
+    //convert to hsv
     Mat hsvMat;
     cvtColor(bgr, hsvMat, COLOR_BGR2HSV);
 
-    return res;
+    //threshold
+    Mat threshedImg;
+    inRange(hsvMat, minHSV, maxHSV, threshedImg);
 
-    vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity);
+    //find contours
+    vector<contour_type> cargo;
+    vector<Vec4i> hierarchy; //throwaway, needed for function
+    findContours(threshedImg, cargo, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+    // sort by area in descending order
+    std::sort(cargo.begin(), cargo.end(), sortContour);
+
+    // remove any vectors with invalid density
+    for (int i = static_cast<int>(cargo.size()); i >= 0; i--) // decrement for no conflict
+    {
+        contour_type cont = cargo[i];
+        double totalArea = contourArea(cont, FALSE);
+        RotatedRect rect = minAreaRect(cont);
+        double rectArea = rect.size.width * rect.size.height;
+        double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
+        if (density < minDensity)
+        {
+            cargo.erase(cargo.begin() + i);
+        }
+    }
+
+    // vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity);
 
     if (static_cast<int>(cargo.size()) == 0)
     {
