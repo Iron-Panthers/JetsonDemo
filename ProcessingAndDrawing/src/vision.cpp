@@ -69,7 +69,7 @@ VisionResultsPackage calculate(const Mat &bgr)
 
     return res;
 
-    // vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity);
+    vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity);
 
     if (static_cast<int>(cargo.size()) == 0)
     {
