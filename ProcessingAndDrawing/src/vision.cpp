@@ -5,6 +5,8 @@ using namespace cv;
 
 #define PI 3.14159265
 
+int imgCount = 0;
+
 Scalar cargoMinHSV = Scalar(10, 150, 200);
 Scalar cargoMaxHSV = Scalar(30, 255, 255);
 float cargoMinDensity = 0.6; // a cirlce is 78% area of its bounding square
@@ -61,6 +63,7 @@ vector<contour_type> findContours(const Mat &bgr, Scalar minHSV, Scalar maxHSV, 
 VisionResultsPackage calculate(const Mat &bgr)
 {
 
+    imgCount++;
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
 
@@ -68,6 +71,7 @@ VisionResultsPackage calculate(const Mat &bgr)
 
     if (static_cast<int>(cargo.size()) == 0)
     {
+        cout << "No target, Image " << imgCount << endl;
         return res;
     }
 
@@ -77,7 +81,7 @@ VisionResultsPackage calculate(const Mat &bgr)
     // find angle to cargo
     double angleToCargo = atan(rectX / focal_length);
 
-    cout << "Angle: " << angleToCargo << endl;
+    cout << "Image " << imgCount << ", Angle: " << angleToCargo << endl;
 
     //create the results package
     res.cargoValid = true;
