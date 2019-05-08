@@ -70,7 +70,7 @@ VisionResultsPackage calculate(const Mat &bgr)
 
     //threshold
     Mat threshedImg;
-    inRange(hsvMat, minHSV, maxHSV, threshedImg);
+    inRange(hsvMat, cargoMinHSV, cargoMaxHSV, threshedImg);
 
     //find contours
     vector<contour_type> cargo;
@@ -88,7 +88,7 @@ VisionResultsPackage calculate(const Mat &bgr)
         RotatedRect rect = minAreaRect(cont);
         double rectArea = rect.size.width * rect.size.height;
         double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
-        if (density < minDensity)
+        if (density < cargoMinDensity)
         {
             cargo.erase(cargo.begin() + i);
         }
