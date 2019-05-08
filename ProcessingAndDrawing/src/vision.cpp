@@ -5,38 +5,12 @@ using namespace cv;
 
 #define PI 3.14159265
 
-int imgCount = 0;
-
-int MIN_HUE = 0; //55;
-int MAX_HUE = 180; //90;
-
-int MIN_SAT = 0;
-int MAX_SAT = 255;
-
-int MIN_VAL = 220;
-int MAX_VAL = 255;
-
-Scalar threshMin = Scalar(MIN_HUE, MIN_SAT, MIN_VAL);
-Scalar threshMax = Scalar(MAX_HUE, MAX_SAT, MAX_VAL);
-
-float MIN_DENSITY = 0.75;
-int CONTOURS_TO_CHECK = 5;
-int pos_thresh = 0;
-
-float h = 5.2; //5.14192; //0.50076; // height in inches of tape that we compare to
-float w = 11.739; //  width in inches of target that we compare to
-
 float p = 0.0;   // angle of camera relative to ground // 0.2788 for real robit
 float W = 640.0; // width of each frame
 float H = 480.0; // height of each frame
-float s_x = 60.0/180.0 * PI; // FOV in x axis of camera in radians
-float s_y = s_x /  W * H; // FOV in y axis of camera  in radians
-float focal_length = (W/2) / tan(s_x/2);
-
-float iData[9] = {559.57544781, 0.0, 287.88704838, 0.0, 558.25711671, 253.80973506, 0.0, 0.0, 1.0};
-float dData[5] = {-0.0614758, -0.10311039, 0.00629035, -0.00674438, 0.47869622};
-Mat intrinsic = Mat(Size(3,3), CV_32F, iData);
-Mat distCoeffs = Mat(Size(1,5), CV_32F, dData);
+float s_x = 60.0/180.0 * PI; // FOV in x axis of camera in radians (measure this)
+float focal_length = (W/2) / tan(s_x/2); // focal length in "pixels"
+float s_y = 2 * atan(H / (2 * focal_length)); // FOV in y axis of camera  in radians
 
 bool sortContour(contour_type a, contour_type b)
 {
@@ -45,61 +19,45 @@ bool sortContour(contour_type a, contour_type b)
     return aArea > bArea;
 }
 
+vector<contour_type> findContours(const Mat &bgr, Scalar minHSV, Scalar maxHSV, float minDensity) {
+    //convert to hsv
+    Mat hsvMat;
+    cvtColor(bgr, hsvMat, COLOR_BGR2HSV);
+
+    //threshold
+    Mat threshedImg;
+    inRange(hsvMat, minHSV, maxHSV, threshedImg);
+
+    //find contours
+    vector<contour_type> contours;
+    vector<Vec4i> hierarchy; //throwaway, needed for function
+    findContours(threshedImg, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+    // sort by area in descending order
+    std::sort(contours.begin(), contours.end(), sortContour);
+
+    // remove any vectors with invalid density
+    for (int i = static_cast<int>(contours.size()); i >= 0; i--) // decrement for no conflict
+    {
+        contour_type cont = contours[i];
+        double totalArea = contourArea(cont, FALSE);
+        RotatedRect rect = minAreaRect(cont);
+        double rectArea = rect.size.width * rect.size.height;
+        double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
+        if (density < MIN_DENSITY) {
+            contours.erase(contours.begin()+i);
+        }
+    }
+
+    return contours;
+}
+
 VisionResultsPackage calculate(const Mat &bgr){
 
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
 
-    // Mat bgrFixed = Mat(bgr.size(), CV_8UC3);
-    // undistort(bgr, bgrFixed, intrinsic, distCoeffs);
-
-    //convert to hsv
-    Mat hsvMat;
-    cvtColor(bgr, hsvMat, COLOR_BGR2HSV);
-
-    //threshold on green (light ring color), high saturation, high brightness
-    Mat threshedImg;
-    inRange(hsvMat, threshMin, threshMax, threshedImg);
-
-    //find contours
-    vector<contour_type> contours;
-    vector<Vec4i> hierarchy; //throwaway, needed for function
-    try {
-        findContours(threshedImg, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
-    }
-    catch (...) { 
-        return res; //return the default result (failure)
-    }
-
-    // sort by size in descending order
-    std::sort(contours.begin(), contours.end(), sortContour);
-
-    // go thru the top CONTOURS_TO_CHECK contours, or as many as possible if we don't have that many
-    int contoursSize = static_cast<int>(contours.size());
-    // cout << "n contours  " << contoursSize << endl;
-    int numContours = std::min(CONTOURS_TO_CHECK, contoursSize);
-    contour_type cont1;
-    bool foundRect1 = false;
-    contour_type cont2;
-    bool foundRect2 = false;
-    for (int i = 0; i < numContours; i++) {
-        contour_type cont = contours[i];
-        double totalArea = contourArea(cont, FALSE);
-        // cout << "contour " << i << " area = " << totalArea << endl;
-        RotatedRect rect = minAreaRect(cont);
-        double rectArea = rect.size.width * rect.size.height;
-        double density = totalArea / rectArea; // compare area of the contour to the area of its bounding rect
-        if (density >= MIN_DENSITY) {
-            if (!foundRect1) {
-                foundRect1 = true;
-                cont1 = cont;
-            } else {
-                foundRect2 = true;
-                cont2 = cont;
-                i = numContours; // if we found both contours we're done
-            }
-        }
-    }
+    
 
     if (!foundRect1 || !foundRect2) { //  if we ended without both contours we exit
         return res; // with failure result
