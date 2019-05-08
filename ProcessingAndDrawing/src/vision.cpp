@@ -7,7 +7,7 @@ using namespace cv;
 
 int imgCount = 0;
 
-Scalar cargoMinHSV = Scalar(10, 150, 200);
+Scalar cargoMinHSV = Scalar(0, 100, 120);
 Scalar cargoMaxHSV = Scalar(30, 255, 255);
 float cargoMinDensity = 0.6;  // a cirlce is 78% area of its bounding square
 
