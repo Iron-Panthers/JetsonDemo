@@ -12,24 +12,34 @@ using namespace std;
 
 struct VisionResultsPackage {
     i64 timestamp;
-    bool valid = false;
-	cv::Point robotPos;
-	double robotAngle;
+    bool hatchValid = false;
+    bool cargoValid = false;
+	double hatchAngle;
+    double hatchDisplace;
+    double cargoAngle;
+    double cargoDistance;
 
     static string createCSVHeader () {
-        return "Timestamp, Valid, X, Y, Theta";
+        return "Timestamp, Valid, HatchValid, HatchAngle, HatchDisplace, CargoValid, CargoAngle, CargoDistance";
     }
 
     string createCSVLine () {
-        if (!valid) {
-            stringstream ss;
-            ss << timestamp << "," << valid << ",0,0,0";
-            return ss.str();
+        stringstream ss;
+        ss << timestamp << ",";
+
+        if (hatchValid) {
+            ss << "1," << hatchAngle << "," << hatchDisplace << ",";
         } else {
-            stringstream ss;
-            ss << timestamp << "," << valid << "," << robotPos.x << "," << robotPos.y << "," << robotAngle;
-            return ss.str();
+            ss << "0,0,0,";
         }
+        
+        if (cargoValid) {
+            ss << "1," << cargoAngle << "," << cargoDistance;
+        } else {
+            ss << "0,0,0";
+        }
+
+        return ss.str();
     }
 };
 
