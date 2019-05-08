@@ -66,7 +66,8 @@ vector<contour_type> findContours(const Mat &bgr, Scalar minHSV, Scalar maxHSV,
         vector<int> compression_params;
         compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
         compression_params.push_back(9);
-        imwrite("/tmp/image.png", processedImage, compression_params);
+        imwrite("/tmp/threshImg.png", processedImage, compression_params);
+        imwrite("/tmp/realImg.png", bgr, compression_params);
     }
 
     return contours;
