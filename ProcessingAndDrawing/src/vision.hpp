@@ -20,7 +20,7 @@ struct VisionResultsPackage {
     double cargoDistance;
 
     static string createCSVHeader () {
-        return "Timestamp, Valid, HatchValid, HatchAngle, HatchDisplace, CargoValid, CargoAngle, CargoDistance";
+        return "Timestamp, HatchValid, HatchAngle, HatchDisplace, CargoValid, CargoAngle, CargoDistance";
     }
 
     string createCSVLine () {
