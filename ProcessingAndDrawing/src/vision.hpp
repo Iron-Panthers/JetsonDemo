@@ -14,13 +14,16 @@ struct VisionResultsPackage {
     i64 timestamp;
     bool hatchValid = false;
     bool cargoValid = false;
-	double hatchAngle;
-    double hatchDisplace;
-    double cargoAngle;
-    double cargoDistance;
+	double hatchAngle = 0;
+    double hatchDistance = 0;
+	double hatchWallAngle = 0;
+	double hatchX = 0;
+	double hatchY = 0;
+    double cargoAngle = 0;
+    double cargoDistance = 0;
 
     static string createCSVHeader () {
-        return "Timestamp, HatchValid, HatchAngle, HatchDisplace, CargoValid, CargoAngle, CargoDistance";
+        return "Timestamp, HatchValid, HatchAngle, HatchDistance, HatchWallAngle, hatchX, hatchY, CargoValid, CargoAngle, CargoDistance";
     }
 
     string createCSVLine () {
@@ -28,9 +31,10 @@ struct VisionResultsPackage {
         ss << timestamp << ",";
 
         if (hatchValid) {
-            ss << "1," << hatchAngle << "," << hatchDisplace << ",";
+            ss << "1," << hatchAngle << "," << hatchDistance << ",";
+			ss << hatchWallAngle << "," << hatchX << "," << hatchY << ",";
         } else {
-            ss << "0,0,0,";
+            ss << "0,0,0,0,0,0,";
         }
         
         if (cargoValid) {
