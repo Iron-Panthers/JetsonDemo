@@ -19,7 +19,8 @@ static GstElement* pipeline;
 
 //network parameters
 int bitrate = 1024;
-int port = 5005; //destination port for raw image
+int port = 5801; //destination port for raw image
+int cvPort = 5803; //dest port for cv image
 const char* ip = "10.50.26.5"; //destination ip
 
 bool verbose = false;
@@ -100,7 +101,7 @@ int main(int argc, char *argv[])
     gst_init(&argc, &argv);
 
     CvCapture_GStreamer mycam;
-    mycam.openSplitPipeline(deviceName, width, height, framerate, bitrate, ip, port);
+    mycam.openSplitPipeline(deviceName, width, height, framerate, bitrate, ip, port, cvPort);
 
     if (verbose)
     {

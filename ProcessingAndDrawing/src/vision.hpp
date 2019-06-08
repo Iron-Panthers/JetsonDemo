@@ -9,27 +9,39 @@
 #include "helper.hpp"
 
 struct VisionResultsPackage {
-    long long timestamp;
-    bool valid = false;
-	cv::Point2f robotPos;
-	double robotAngle;
-    cv::Mat rvec;
-    cv::Mat tvec;
+    i64 timestamp;
+    bool hatchValid = false;
+    bool cargoValid = false;
+	double hatchAngle = 0;
+    double hatchDistance = 0;
+	double hatchWallAngle = 0;
+	double hatchX = 0;
+	double hatchY = 0;
+    double cargoAngle = 0;
+    double cargoDistance = 0;
 
-    static std::string createCSVHeader () {
-        return "Timestamp, Valid, X, Y, Theta";
+    static string createCSVHeader () {
+        return "Timestamp, HatchValid, HatchAngle, HatchDistance, HatchWallAngle, hatchX, hatchY, CargoValid, CargoAngle, CargoDistance";
     }
 
-    std::string createCSVLine () {
-        if (!valid) {
-            std::stringstream ss;
-            ss << timestamp << "," << valid << ",0,0,0";
-            return ss.str();
+    string createCSVLine () {
+        stringstream ss;
+        ss << timestamp << ",";
+
+        if (hatchValid) {
+            ss << "1," << hatchAngle << "," << hatchDistance << ",";
+			ss << hatchWallAngle << "," << hatchX << "," << hatchY << ",";
         } else {
-            std::stringstream ss;
-            ss << timestamp << "," << valid << "," << robotPos.x << "," << robotPos.y << "," << robotAngle;
-            return ss.str();
+            ss << "0,0,0,0,0,0,";
         }
+        
+        if (cargoValid) {
+            ss << "1," << cargoAngle << "," << cargoDistance;
+        } else {
+            ss << "0,0,0";
+        }
+
+        return ss.str();
     }
 };
 
@@ -41,6 +53,6 @@ typedef std::vector<cv::Point> contour_type;
  * @param bgr raw image to do processing on
  * @return results of vision processing (e.g location of target, timestamp)
  */
-VisionResultsPackage calculate(const cv::Mat &bgr);
+VisionResultsPackage calculate(const cv::Mat &bgr, cv::Mat &processedImage);
 
 #endif

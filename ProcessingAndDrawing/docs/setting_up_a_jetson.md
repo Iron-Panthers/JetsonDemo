@@ -1,0 +1,1 @@
+## Guide to setting up a new Jetson (Nano) with required programs
