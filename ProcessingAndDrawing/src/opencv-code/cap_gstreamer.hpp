@@ -50,11 +50,12 @@ public:
     ~CvCapture_GStreamer() { close(); }
 
     bool open( int type, const char* filename );
-    bool openSplitPipeline(const char* device, int width, int height, int framerate, int bitrate, const char *ip, int port);
+    bool openSplitPipeline(const char* device, int width, int height, int framerate, int bitrate, const char *ip, int port, int cvPort);
+    bool writeFrame(const IplImage* image);
     void close();
 
     GstElement *pipeline;
-    GstElement *writePipeline;
+	GstElement *writePipe;
     gint width;
     gint height;
     int frameCount;
@@ -66,16 +67,18 @@ public:
     void startPipeline();
     void stopPipeline();
     void restartPipeline();
-    
+
     GstElement *uridecodebin;
     GstElement*   appSrc;
     GstElement*   v4l2src;
     GstElement*   color;
     GstElement*   sink;
+    GstElement* source;
 
     GstCaps*      caps;
     gint64        duration;
     double        fps;
+	int	num_frames;
 };
 
 #endif

@@ -146,11 +146,13 @@ float angleToWall(float leftPixelX, float rightPixelX, float r, float h) {
 	return angle;
 }
 
-VisionResultsPackage calculate(const Mat &bgr) {
+VisionResultsPackage calculate(const Mat &bgr, cv::Mat &processedImage) {
     imgCount++;
 	cout << "Image " << imgCount;
     ui64 time_began = millis_since_epoch();
     VisionResultsPackage res;
+
+	processedImage = bgr.clone();
 
     vector<contour_type> cargo = findContours(bgr, cargoMinHSV, cargoMaxHSV, cargoMinDensity, false);
 	vector<contour_type> hatch = findContours(bgr, hatchMinHSV, hatchMaxHSV, hatchMinDensity, true);
@@ -158,20 +160,22 @@ VisionResultsPackage calculate(const Mat &bgr) {
     if (static_cast<int>(cargo.size()) == 0) {
         cout << " | No cargo found.";
     } else {
-		Rect cargoRect = boundingRect(cargo[0]);
-		float rectX = cargoRect.x + cargoRect.width/2 - W/2;
-		float rectY = cargoRect.y + cargoRect.height/2 - H/2;
+        drawContours(processedImage, cargo, 0, Scalar(0, 255, 0), 2);
 
-		// find angle to cargo
-		float angleToCargo = xPixelAngle(rectX+W/2);
+        Rect cargoRect = boundingRect(cargo[0]);
+        float rectX = cargoRect.x + cargoRect.width / 2 - W / 2;
+        float rectY = cargoRect.y + cargoRect.height / 2 - H / 2;
 
-		// find distance to cargo
-		float screenRadius = (cargoRect.width + cargoRect.height) / 4.0;
-		float screenDistance = sqrt(rectX*rectX + rectY*rectY);
-		float smallAngle = atan((screenDistance - screenRadius) / focal_length);
-		float bigAngle = atan((screenDistance + screenRadius) / focal_length);
-		float screenAngle = bigAngle - smallAngle;
-		float distanceToCargo = cargoDiameter / (2.0 * tan(screenAngle / 2.0));
+        // find angle to cargo
+        float angleToCargo = xPixelAngle(rectX + W / 2);
+
+        // find distance to cargo
+        float screenRadius = (cargoRect.width + cargoRect.height) / 4.0;
+        float screenDistance = sqrt(rectX * rectX + rectY * rectY);
+        float smallAngle = atan((screenDistance - screenRadius) / focal_length);
+        float bigAngle = atan((screenDistance + screenRadius) / focal_length);
+        float screenAngle = bigAngle - smallAngle;
+        float distanceToCargo = cargoDiameter / (2.0 * tan(screenAngle / 2.0));
 
     	cout << " | Angle: " << angleToCargo << ", Distance: " << distanceToCargo;
 
@@ -182,6 +186,8 @@ VisionResultsPackage calculate(const Mat &bgr) {
     if (static_cast<int>(hatch.size()) == 0) {
 		cout << " | No hatch found.";
 	} else {
+		drawContours(processedImage, hatch, 0, Scalar(0, 255, 0), 2);
+
 		Rect hatchRect = boundingRect(hatch[0]);
 		vector<Point> bestHatch = hatch[0];
 

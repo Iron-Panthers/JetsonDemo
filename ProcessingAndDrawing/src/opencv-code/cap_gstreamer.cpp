@@ -96,6 +96,7 @@ void CvCapture_GStreamer::init()
     height = -1;
     fps = -1;
     frameCount = 0;
+	num_frames = 0;
 }
 
 /*!
@@ -107,10 +108,21 @@ void CvCapture_GStreamer::close()
     if (isPipelinePlaying())
         this->stopPipeline();
 
-    if (pipeline)
+    if (this->pipeline)
     {
         gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_NULL);
         gst_object_unref(GST_OBJECT(pipeline));
+        pipeline = NULL;
+    }
+
+	if(this->writePipe) {
+		if (gst_app_src_end_of_stream(GST_APP_SRC(this->source)) != GST_FLOW_OK) {
+            CV_WARN("Cannot send EOS to GStreamer pipeline\n");
+            return;
+        }
+
+        gst_element_set_state(GST_ELEMENT(this->writePipe), GST_STATE_NULL);
+        gst_object_unref(GST_OBJECT(this->writePipe));
         pipeline = NULL;
     }
 
@@ -151,8 +163,6 @@ void CvCapture_GStreamer::startPipeline()
 {
     CV_FUNCNAME("icvStartPipeline");
 
-    __BEGIN__;
-
     //fprintf(stderr, "relinked, pausing\n");
     cout << "starting pipeline" << endl;
     GstStateChangeReturn status = gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_PLAYING);
@@ -165,13 +175,26 @@ void CvCapture_GStreamer::startPipeline()
     {
         gst_object_unref(pipeline);
         pipeline = NULL;
-        CV_ERROR(CV_StsError, "GStreamer: unable to start pipeline\n");
+        printf("GStreamer: unable to start pipeline\n");
+        return;
+    }
+    cout << "pipeline started" << endl;
+
+    cout << "starting write pipeline" << endl;
+    GstStateChangeReturn writeStatus = gst_element_set_state(GST_ELEMENT(writePipe), GST_STATE_PLAYING);
+    if (writeStatus == GST_STATE_CHANGE_ASYNC) {
+        // wait for status update
+        writeStatus = gst_element_get_state(writePipe, NULL, NULL, GST_CLOCK_TIME_NONE);
+    }
+    if (writeStatus == GST_STATE_CHANGE_FAILURE) {
+        gst_object_unref(writePipe);
+        writePipe = NULL;
+        printf("GStreamer: unable to start pipeline\n");
         return;
     }
     cout << "pipeline started" << endl;
 
     // printf("state now playing\n");
-    __END__;
 }
 
 /*!
@@ -182,18 +205,15 @@ void CvCapture_GStreamer::stopPipeline()
 {
     CV_FUNCNAME("icvStopPipeline");
 
-    __BEGIN__;
-
     //fprintf(stderr, "restarting pipeline, going to ready\n");
     if (gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_NULL) ==
         GST_STATE_CHANGE_FAILURE)
     {
-        CV_ERROR(CV_StsError, "GStreamer: unable to stop pipeline\n");
+        printf("GStreamer: unable to stop pipeline\n");
         gst_object_unref(pipeline);
         pipeline = NULL;
         return;
     }
-    __END__;
 }
 
 /*!
@@ -221,11 +241,15 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
             return GST_FLOW_ERROR;
         }
 
+        cv::Mat processedImage;
         GstMapInfo info;
         gst_buffer_map(buffer, &info, (GstMapFlags)GST_MAP_READ);
         cv::Mat frameMat = cv::Mat(cv::Size(obj->width, obj->height), CV_8UC3, (char *)info.data);
-        VisionResultsPackage res = calculate(frameMat);
-        NetTableManager::getInstance()->pushToNetworkTables(res);
+        VisionResultsPackage res = calculate(frameMat, processedImage);
+        // NetTableManager::getInstance()->pushToNetworkTables(res);
+        IplImage outImage = (IplImage)processedImage;
+		printf("WRITING FRAME\n");
+        obj->writeFrame(&outImage);
 
         gst_buffer_unmap(buffer, &info);
         gst_sample_unref(sample);
@@ -238,11 +262,57 @@ static GstFlowReturn new_sample(GstElement *sink, CvCapture_GStreamer* obj)
     return GST_FLOW_ERROR;    
 }
 
-bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int height, int framerate, int bitrate, const char *ip, int port)
+bool CvCapture_GStreamer::writeFrame(const IplImage *image) {
+    GstClockTime duration, timestamp;
+    GstFlowReturn ret;
+    int size;
+
+	if (image->nChannels != 3 || image->depth != IPL_DEPTH_8U) {
+		printf("cvWriteFrame() needs images with depth = IPL_DEPTH_8U and nChannels = 3.");
+	}
+
+    size = image->imageSize;
+    duration = ((double)1 / this->fps) * GST_SECOND;
+    timestamp = num_frames * duration;
+
+    //gst_app_src_push_buffer takes ownership of the buffer, so we need to supply it a copy
+    GstBuffer *buffer = gst_buffer_new_allocate(NULL, size, NULL);
+    GstMapInfo info;
+    gst_buffer_map(buffer, &info, (GstMapFlags)GST_MAP_READ);
+	printf("ABOUT TO MEMCOPY \n");
+    memcpy(info.data, (guint8 *)image->imageData, size);
+	printf("DID MEMCOPY \n");
+    gst_buffer_unmap(buffer, &info);
+    GST_BUFFER_DURATION(buffer) = duration;
+    GST_BUFFER_PTS(buffer) = timestamp;
+    GST_BUFFER_DTS(buffer) = timestamp;
+
+    //set the current number in the frame
+    GST_BUFFER_OFFSET(buffer) = num_frames;
+
+	printf("ABOUT TO GET SRC BUFFER\n");
+    ret = gst_app_src_push_buffer(GST_APP_SRC(source), buffer);
+
+	printf("DID FINAL WRITE STEP \n");
+
+    if (ret != GST_FLOW_OK) {
+        CV_WARN("Error pushing buffer to GStreamer pipeline");
+        return false;
+    }
+
+    //GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "pipeline");
+
+    ++num_frames;
+
+    return true;
+}
+
+bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int height, int framerate, int bitrate, const char *ip, int port, int cvPort)
 {
 
     this->width = width;
     this->height = height;
+	this->fps = framerate;
 
     /* Create the elements */
     GstElement *pipeline = gst_pipeline_new("cv_pipeline");
@@ -309,5 +379,21 @@ bool CvCapture_GStreamer::openSplitPipeline(const char *device, int width, int h
     this->v4l2src = camSource;
     this->pipeline = pipeline;
     printf("set pipeline\n");
+
+    /* Create the elements */
+    GstElement *writePipe = gst_parse_launch("appsrc name=app_src block=true ! video/x-raw,width=640,height=480,framerate=30/1 ! x264enc speed-preset=1 tune=zerolatency bitrate=1024 ! rtph264pay ! udpsink host=10.50.26.5 port=5803", NULL);
+    GstElement* writeSource = gst_bin_get_by_name(GST_BIN(writePipe), "app_src");
+    GstCaps *source_caps = gst_caps_new_simple("video/x-raw",
+                                              "width", G_TYPE_INT, width,
+                                              "height", G_TYPE_INT, height,
+                                              "framerate", GST_TYPE_FRACTION, framerate, 1,
+                                              "format", G_TYPE_STRING, "BGR",
+                                              NULL);
+    gst_app_src_set_caps(GST_APP_SRC(writeSource), source_caps);
+
+    this->writePipe = writePipe;
+    this->source = writeSource;
+    printf("set write pipeline\n");
+
     return true;
 }

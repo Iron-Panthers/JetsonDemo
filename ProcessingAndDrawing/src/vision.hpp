@@ -54,7 +54,7 @@ typedef std::vector<cv::Point> contour_type;
  * from the image. Results package is returned in a struct.
  * @param bgr raw image to do processing on
  * @return results of vision processing (e.g location of target, timestamp)
- */ 
-VisionResultsPackage calculate(const cv::Mat &bgr);
+ */
+VisionResultsPackage calculate(const cv::Mat &bgr, cv::Mat &processedImage);
 
 #endif
